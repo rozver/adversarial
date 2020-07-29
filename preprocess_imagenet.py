@@ -5,17 +5,34 @@ from custom_imagenet import CustomImageNet
 from matplotlib import pyplot as plt
 import requests
 import numpy as np
+from normalizer import Normalizer
 
 # Check whether the dataset should be inspected
-print('Do you want to inspect the dataset with its corresponding predicted labels: (yes/no)')
+print('Do you want to inspect the dataset with its corresponding predicted labels? (yes/no)')
 whether_to_inspect = input()
 
+print('Use RGB version (grayscale otherwise)? (yes/no)')
+rgb_version = input()
+
+
 # Transform the images and resize them to (224, 224)
-transform = transforms.Compose([
-    transforms.Resize(256),
-    transforms.CenterCrop(224),
-    transforms.ToTensor(),
-])
+
+if rgb_version == 'yes':
+    transform = transforms.Compose([
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+    ])
+
+else:
+    transform = transforms.Compose([
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.Grayscale(num_output_channels=3),
+        transforms.ToTensor(),
+    ])
+
+normalize = Normalizer(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 
 # Load the custom ImageNet dataset and slice it into batches
 dataset = CustomImageNet(location='./dataset/imagenet-dogs', transform=transform)
@@ -28,7 +45,7 @@ model.eval()
 # For each image: get its corresponding label and save it to a list
 labels = []
 for image in data_loader:
-    prediction = model(image)
+    prediction = model(normalize(image))
     for i in prediction:
         labels.append((torch.argmax(i)))
 
@@ -49,5 +66,9 @@ if whether_to_inspect == 'yes':
             plt.show()
 
 # Serialize the images and the labels
-torch.save(data_loader, './dataset/imagenet-dogs-images.pt')
-torch.save(labels, './dataset/imagenet-dogs-labels.pt')
+if rgb_version == 'yes':
+    torch.save(data_loader, './dataset/imagenet-dogs-images.pt')
+    torch.save(labels, './dataset/imagenet-dogs-labels.pt')
+else:
+    torch.save(data_loader, './dataset/imagenet-dogs-images-grayscale.pt')
+    torch.save(labels, './dataset/imagenet-dogs-labels-grayscale.pt')
