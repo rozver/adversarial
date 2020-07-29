@@ -12,9 +12,9 @@ whether_to_inspect = input()
 
 # Transform the images and resize them to (224, 224)
 transform = transforms.Compose([
-    transforms.Resize((224, 224)),
+    transforms.Resize(256),
+    transforms.CenterCrop(224),
     transforms.ToTensor(),
-    transforms.Normalize((0.5,), (0.5,)),
 ])
 
 # Load the custom ImageNet dataset and slice it into batches
@@ -33,7 +33,7 @@ for image in data_loader:
         labels.append((torch.argmax(i)))
 
 # Slice the labels into batches
-labels = torch.chunk(torch.from_numpy(np.array(labels)), 4)
+labels = torch.chunk(torch.from_numpy(np.array(labels)), 13)
 
 if whether_to_inspect == 'yes':
     # Load corresponding class name for the predicted labels
@@ -42,8 +42,8 @@ if whether_to_inspect == 'yes':
     imagenet_classes = eval(requests.get(url).content)
 
     # Inspect the images with their corresponding lables
-    for image_batch, label_batch in zip(data_loader, labels):
-        for image, label in zip(image_batch, label_batch):
+    for images_batch, labels_batch in zip(data_loader, labels):
+        for image, label in zip(images_batch, labels_batch):
             plt.imshow(image.permute(1, 2, 0))
             plt.xlabel(imagenet_classes[label.item()])
             plt.show()
