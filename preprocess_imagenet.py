@@ -14,9 +14,7 @@ whether_to_inspect = input()
 print('Use RGB version (grayscale otherwise)? (yes/no)')
 rgb_version = input()
 
-
-# Transform the images and resize them to (224, 224)
-
+# Resize them to (224, 224, 3) and transform them to a PyTorch tensor
 if rgb_version == 'yes':
     transform = transforms.Compose([
         transforms.Resize(256),
@@ -32,6 +30,7 @@ else:
         transforms.ToTensor(),
     ])
 
+# Normalize the dataset
 normalize = Normalizer(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 
 # Load the custom ImageNet dataset and slice it into batches
