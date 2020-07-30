@@ -22,9 +22,9 @@ def main():
 
     kwargs = {
         'constraint': 'inf',
-        'eps': 0.04,
-        'step_size': 0.3,
-        'iterations': 15,
+        'eps': 1,
+        'step_size': 0.01,
+        'iterations': 10,
         'do_tqdm': True,
     }
 
