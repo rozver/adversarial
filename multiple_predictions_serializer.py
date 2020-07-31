@@ -33,9 +33,14 @@ if __name__ == '__main__':
     if len(sys.argv) == 2:
         location = sys.argv[1]
         if os.path.isdir(location):
+            print('Starting to make predictions...')
             dictionary = PredictionsDictionary(location).dictionary
+            print('Finished')
+
+            print('Starting serialization...')
             csv_file_location = os.path.join(location, 'labels.csv')
             save_dictionary_as_csv(dictionary, csv_file_location)
+            print('Finished')
         else:
             print('Invalid folder location!')
     else:
