@@ -1,18 +1,19 @@
 import torch
 import os
 import sys
+import torchvision
 import pandas as pd
-from get_image_prediction import predict
+from predict import predict
 
 
-def predict_recursive(current_folder_location, predictions_dictionary):
+def predict_recursive(current_folder_location, model, predictions_dictionary):
     for entity in os.listdir(current_folder_location):
         entity_location = os.path.join(current_folder_location, entity)
         if entity.endswith(('.png', '.jpg', '.jpeg')):
-            predicted_class = torch.argmax(predict(entity_location)).item()
+            predicted_class = torch.argmax(predict(entity_location, model)).item()
             predictions_dictionary[entity_location] = predicted_class
         elif os.path.isdir(entity_location):
-            predict_recursive(entity_location, predictions_dictionary)
+            predict_recursive(entity_location, model, predictions_dictionary)
 
 
 def save_dictionary_as_csv(predictions_dictionary, csv_file):
@@ -27,7 +28,8 @@ if __name__ == '__main__':
         if os.path.isdir(location):
             print('Starting to make predictions...')
             dictionary = {}
-            predict_recursive(location, dictionary)
+            model = torchvision.models.resnet50(pretrained=True).eval()
+            predict_recursive(location, model, dictionary)
             print('Finished')
 
             print('Starting serialization...')
