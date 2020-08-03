@@ -6,7 +6,7 @@ import sys
 import os
 
 
-def predict(x, model, is_tensor=True, use_gpu=False):
+def predict(x, model, is_tensor=False, use_gpu=False):
     if not is_tensor:
         image_to_predict = Image.open(x)
 
@@ -38,13 +38,21 @@ def predict(x, model, is_tensor=True, use_gpu=False):
         return prediction.detach()
 
 
+def predict_multiple(images_batch, model, is_tensor=True, use_gpu=False):
+    predictions = []
+    for image in images_batch:
+        predictions.append(predict(image, model, is_tensor, use_gpu))
+    predictions = torch.cat(predictions)
+    return predictions
+
+
 if __name__ == '__main__':
     if len(sys.argv) == 2:
         location = sys.argv[1]
         if os.path.exists(location):
             if location.endswith(('png', 'jpg', 'jpeg')):
                 model = torchvision.models.resnet50(pretrained=True).eval()
-                predicted_class = torch.argmax(predict(location, model, is_tensor=False)).item()
+                predicted_class = torch.argmax(predict(location, model)).item()
                 print(predicted_class)
             else:
                 print('The entered file is not an image with a format .png, .jpg or .jpeg!')
