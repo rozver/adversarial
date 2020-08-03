@@ -16,9 +16,9 @@ def predict_recursive(current_folder_location, model, predictions_dictionary):
             predict_recursive(entity_location, model, predictions_dictionary)
 
 
-def save_dictionary_as_csv(predictions_dictionary, csv_file):
+def save_dictionary_as_csv(dictionary, csv_file):
     with open(csv_file, 'w') as f:
-        (pd.DataFrame.from_dict(data=predictions_dictionary, orient='index')
+        (pd.DataFrame.from_dict(data=dictionary, orient='index')
          .to_csv(f, header=False))
 
 
