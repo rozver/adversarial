@@ -51,7 +51,7 @@ if __name__ == '__main__':
         if os.path.exists(location):
             if location.endswith(('png', 'jpg', 'jpeg')):
                 model = torchvision.models.resnet50(pretrained=True).eval()
-                predicted_class = torch.argmax(predict(location, model)).item()
+                predicted_class = torch.argmax(predict(location, model, is_tensor=False)).item()
                 print(predicted_class)
             else:
                 print('The entered file is not an image with a format .png, .jpg or .jpeg!')
