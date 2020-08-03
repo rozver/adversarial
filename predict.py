@@ -6,7 +6,7 @@ import sys
 import os
 
 
-def predict(x, model, is_tensor=False, use_gpu=False):
+def predict(x, model, is_tensor=True, use_gpu=False):
     if not is_tensor:
         image_to_predict = Image.open(x)
 
@@ -30,7 +30,6 @@ def predict(x, model, is_tensor=False, use_gpu=False):
 
     if use_gpu:
         model = model.cuda()
-
         prediction = model(image_to_predict.cuda())
         return prediction.cpu().detach()
     else:
