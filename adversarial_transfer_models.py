@@ -27,20 +27,45 @@ def get_model(model_name):
     return models_dict.get(model_name, models_dict.get('resnet50'))
 
 
+def get_original_location(image_location):
+    folders = image_location.split('/')
+    original_location = ''
+    for i in range(len(folders)):
+        if i == len(folders)-1:
+            original_location = original_location + 'original/'
+        original_location = original_location + folders[i] + '/'
+
+    original_location = original_location[:-1]
+
+    if os.path.exists(original_location):
+        return original_location
+    return None
+
+
 def compare_predictions(csv_location, model):
     successful_transfers = 0
+    successful_transfers_match = 0
     total_images = 0
     with open(csv_location) as csv_file:
         for row in csv_file:
             image_location, label = row.split(',')
+            if 'original' in image_location:
+                continue
             current_model_prediction = torch.argmax(predict(image_location, model, is_tensor=False)).item()
+            original_location = get_original_location(image_location)
+            if original_location is None:
+                continue
 
-            if current_model_prediction == int(label):
+            original_prediction = torch.argmax(predict(original_location, model, is_tensor=False)).item()
+
+            if current_model_prediction != original_prediction:
                 successful_transfers += 1
 
-            total_images += 1
+            if current_model_prediction == int(label):
+                successful_transfers_match += 1
 
-    return successful_transfers/total_images
+            total_images += 1
+    return str(successful_transfers/total_images) + ',' + str((successful_transfers_match/total_images))
 
 
 def summarize_predictions_scores(csv_location):
