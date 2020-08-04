@@ -1,9 +1,10 @@
 import torch
 import torchvision
 from torch import autograd
+from matplotlib import pyplot as plt
 
 
-def fsgm(model, images_batch, labels_batch, epsilon):
+def fgsm(model, images_batch, labels_batch, epsilon):
     images = autograd.Variable(images_batch, requires_grad=True)
     criterion = torch.nn.CrossEntropyLoss()
     predictions = model(images)
@@ -14,7 +15,7 @@ def fsgm(model, images_batch, labels_batch, epsilon):
     adversarial_examples = []
 
     for grad in grads_batch:
-        adversarial_examples.append(images + epsilon*torch.sign(grad))
+        adversarial_examples.append(images + epsilon*grad.sign().detach())
 
     return torch.cat(adversarial_examples).detach()
 
@@ -28,7 +29,7 @@ def main():
     model = torchvision.models.resnet50(pretrained=True).eval()
 
     for images_batch, labels_batch in zip(images_loader, labels_loader):
-        adversarial_batch = fsgm(model, images_batch, labels_batch, epsilon)
+        adversarial_batch = fgsm(model, images_batch, labels_batch, epsilon)
 
         original_predictions = model(images_batch)
         adversarial_predictions = model(adversarial_batch)
