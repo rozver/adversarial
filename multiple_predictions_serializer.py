@@ -10,7 +10,7 @@ def predict_recursive(current_folder_location, model, predictions_dictionary):
     for entity in os.listdir(current_folder_location):
         entity_location = os.path.join(current_folder_location, entity)
         if entity.endswith(('.png', '.jpg', '.jpeg')):
-            predicted_class = torch.argmax(predict(entity_location, model)).item()
+            predicted_class = torch.argmax(predict(entity_location, model, is_tensor=False)).item()
             predictions_dictionary[entity_location] = predicted_class
         elif os.path.isdir(entity_location):
             predict_recursive(entity_location, model, predictions_dictionary)
