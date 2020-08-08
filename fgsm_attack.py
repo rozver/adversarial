@@ -1,7 +1,6 @@
 import torch
 import torchvision
 from torch import autograd
-from matplotlib import pyplot as plt
 
 
 def fgsm(model, images_batch, labels_batch, epsilon):
