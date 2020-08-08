@@ -133,3 +133,12 @@ dataset/
 
 # Models
 models/
+
+# Results
+results/
+
+# Paper
+paper/
+
+# Pycharm .idea
+.idea/
