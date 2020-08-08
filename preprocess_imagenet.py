@@ -68,10 +68,10 @@ def main():
 
     # Serialize the images and the labels
     if rgb_version == 'yes':
-        torch.save(data_loader, './dataset/imagenet-dogs-images.pt')
+        torch.save(dataset, './dataset/imagenet-dogs-images.pt')
         torch.save(labels, './dataset/imagenet-dogs-labels.pt')
     else:
-        torch.save(data_loader, './dataset/imagenet-dogs-images-grayscale.pt')
+        torch.save(dataset, './dataset/imagenet-dogs-images-grayscale.pt')
         torch.save(labels, './dataset/imagenet-dogs-labels-grayscale.pt')
 
 
