@@ -1,6 +1,6 @@
 import torch
-from robust.robustness.datasets import ImageNet
-from robust.robustness.model_utils import make_and_restore_model
+from robustness.datasets import ImageNet
+from robustness.model_utils import make_and_restore_model
 from adversarial_transfer_models import get_models_dict
 from untargeted_imagenet import save_images
 import datetime
