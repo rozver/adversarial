@@ -50,13 +50,17 @@ def main():
         label = label.view(1).cuda()
 
         # Create an adversarial example of the original images
-        _, images_adversarial = model(image, label, make_adv=True, **kwargs)
-        predictions, _ = model(images_adversarial)
-        print(torch.argmax(predictions[0]))
+        _, adversarial_example = model(image, label, make_adv=True, **kwargs)
+        adversarial_prediction, _ = model(adversarial_example)
+        adversarial_prediction = torch.argmax(adversarial_prediction[0])
+
+        # Print the original and the adversarial prediction
+        print('Original prediction: ' + str(label.item()))
+        print('Adversarial prediction: ' + str(adversarial_prediction.item()))
 
         # Save the adversarial example in the same folder as the original iamge
         adversarial_location = args.image[0:-5] + '-adversarial' + args.image[-5:]
-        save_image(images_adversarial[0], adversarial_location)
+        save_image(adversarial_example[0], adversarial_location)
 
     else:
         print('Incorrect image path!')
