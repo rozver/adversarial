@@ -24,7 +24,6 @@ def main():
         transform = transforms.Compose([
             transforms.ToTensor(),
         ])
-
         image = transform(image)
         image = image.unsqueeze(0).cuda()
 
@@ -40,10 +39,12 @@ def main():
         # Set the dataset for the robustness model
         dataset = ImageNet('dataset/')
 
-        # Make a robustness model
+        # Initialize a pretrained model via the robustness library
         model, _ = make_and_restore_model(arch='resnet50', dataset=dataset,
                                           pytorch_pretrained=True)
         model = model.cuda()
+
+        # For evaluation, the standard ResNet50 from torchvision is used
         eval_model = torchvision.models.resnet50(pretrained=True).cpu().eval()
 
         # Get the model prediction for the original image
@@ -58,7 +59,7 @@ def main():
         adversarial_prediction = eval_model(adversarial_example.cpu())
         adversarial_prediction = torch.argmax(adversarial_prediction[0])
 
-        # Print the original and the adversarial prediction
+        # Print the original and the adversarial predictions
         print('Original prediction: ' + str(label.item()))
         print('Adversarial prediction: ' + str(adversarial_prediction.item()))
 
