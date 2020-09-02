@@ -2,7 +2,7 @@ import torch
 import torchvision
 from torchvision import transforms
 from PIL import Image
-import sys
+import argparse
 import os
 
 
@@ -14,19 +14,12 @@ def predict(x, model, is_tensor=True, use_gpu=False):
             transforms.ToTensor(),
         ])
 
-        if image_to_predict.size != (3, 224, 224):
-            transform = transforms.Compose([
-                transforms.Resize(256),
-                transforms.CenterCrop(224),
-                transforms.ToTensor(),
-            ])
-
         image_to_predict = transform(image_to_predict)
-        image_to_predict = image_to_predict.view(1, 3, 224, 224)
+        image_to_predict = image_to_predict.unsqueeze(0)
     else:
         image_to_predict = x
         if len(x.shape) != 4:
-            image_to_predict = x.view(1, 3, 224, 224)
+            image_to_predict = image_to_predict.unsqueeze(0)
 
     if use_gpu:
         model = model.cuda()
@@ -46,16 +39,15 @@ def predict_multiple(images_batch, model, is_tensor=True, use_gpu=False):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) == 2:
-        location = sys.argv[1]
-        if os.path.exists(location):
-            if location.endswith(('png', 'jpg', 'jpeg')):
-                model = torchvision.models.resnet50(pretrained=True).eval()
-                predicted_class = torch.argmax(predict(location, model, is_tensor=False)).item()
-                print(predicted_class)
-            else:
-                print('The entered file is not an image with a format .png, .jpg or .jpeg!')
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--image', type=str, required=True)
+    args = parser.parse_args()
+    if os.path.exists(args.image):
+        if args.image.endswith(('png', 'jpg', 'jpeg')):
+            model = torchvision.models.resnet50(pretrained=True).eval()
+            predicted_class = torch.argmax(predict(args.image, model, is_tensor=False)).item()
+            print(predicted_class)
         else:
-            print('Incorrect image path!')
+            print('The entered file is not an image with a format .png, .jpg or .jpeg!')
     else:
-        print('Please enter image path!')
+        print('Incorrect image path!')
