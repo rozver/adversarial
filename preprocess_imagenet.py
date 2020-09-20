@@ -6,18 +6,19 @@ from matplotlib import pyplot as plt
 import requests
 import numpy as np
 from normalizer import Normalizer
+import argparse
 
 
 def main():
-    # Check whether the dataset should be inspected
-    print('Do you want to inspect the dataset with its corresponding predicted labels? (yes/no)')
-    whether_to_inspect = input()
-
-    print('Use RGB version (grayscale otherwise)? (yes/no)')
-    rgb_version = input()
+    # Parse arguments from command line
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--location', type=str, required=True)
+    parser.add_argument('--inspect', type=str, default='no')
+    parser.add_argument('--rgb', type=str, default='yes')
+    args = parser.parse_args()
 
     # Resize them to (224, 224, 3) and transform them to a PyTorch tensor
-    if rgb_version == 'yes':
+    if args.rgb == 'yes':
         transform = transforms.Compose([
             transforms.Resize(256),
             transforms.CenterCrop(224),
@@ -36,7 +37,8 @@ def main():
     normalize = Normalizer(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 
     # Load the custom ImageNet dataset and slice it into batches
-    dataset = CustomImageNet(location='./dataset/imagenet-dogs', transform=transform)
+    dataset = CustomImageNet(location=args.location, transform=transform)
+
     data_loader = torch.utils.data.DataLoader(dataset, batch_size=4, num_workers=2)
 
     # Load pre-trained ResNet50 on ImageNet and enable eval mode
@@ -53,7 +55,7 @@ def main():
     # Slice the labels into batches
     labels = torch.chunk(torch.from_numpy(np.array(labels)), 13)
 
-    if whether_to_inspect == 'yes':
+    if args.inspect == 'yes':
         # Load corresponding class name for the predicted labels
         url = 'https://gist.githubusercontent.com/yrevar/942d3a0ac09ec9e5eb3a/' \
               'raw/596b27d23537e5a1b5751d2b0481ef172f58b539/imagenet1000_clsid_to_human.txt'
@@ -67,12 +69,12 @@ def main():
                 plt.show()
 
     # Serialize the images and the labels
-    if rgb_version == 'yes':
-        torch.save(dataset, './dataset/imagenet-dogs-images.pt')
-        torch.save(labels, './dataset/imagenet-dogs-labels.pt')
+    if args.rgb == 'yes':
+        torch.save(dataset, args.location + '-images.pt')
+        torch.save(labels, args.location + '-labels.pt')
     else:
-        torch.save(dataset, './dataset/imagenet-dogs-images-grayscale.pt')
-        torch.save(labels, './dataset/imagenet-dogs-labels-grayscale.pt')
+        torch.save(dataset, args.location + '-images-grayscale.pt')
+        torch.save(labels, args.location + '-labels-grayscale.pt')
 
 
 if __name__ == '__main__':
