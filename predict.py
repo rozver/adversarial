@@ -42,6 +42,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--image', type=str, required=True)
     args = parser.parse_args()
+    
     if os.path.exists(args.image):
         if args.image.endswith(('png', 'jpg', 'jpeg')):
             model = torchvision.models.resnet50(pretrained=True).eval()
