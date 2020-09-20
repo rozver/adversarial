@@ -1,5 +1,6 @@
 import torch
 import torchvision
+from torchvision.utils import save_image
 
 
 def get_original_pred_score(model, x, true_label):
@@ -9,7 +10,7 @@ def get_original_pred_score(model, x, true_label):
     return prediction
 
 
-def attack_pixels(model, x, true_label, num_iters=1000, epsilon=0.6):
+def attack_pixels(model, x, true_label, num_iters=10000, epsilon=0.6):
     n_dims = x.view(-1).size(0)
     perm = torch.randperm(n_dims)
     last_prob = get_original_pred_score(model, x, true_label)
@@ -34,7 +35,7 @@ def get_probs(model, x, y):
     return torch.diag(probs.data)
 
 
-def simba_single(model, x, y, num_iters=300, epsilon=0.2):
+def simba_single(model, x, y, num_iters=10000, epsilon=0.2):
     n_dims = x.view(1, -1).size(1)
     perm = torch.randperm(n_dims)
     last_prob = get_probs(model, x, y)
@@ -54,27 +55,35 @@ def simba_single(model, x, y, num_iters=300, epsilon=0.2):
 
 
 def main():
+    index = 0
     pixels_score = 0
     simba_score = 0
     model = torchvision.models.resnet50(pretrained=True).cuda().eval()
     data_loader = torch.load('dataset/imagenet-dogs-images.pt')
-    for images_batch in data_loader:
-        for image in images_batch:
+
+    for image in data_loader:
             original_prediction = torch.argmax(model(image.view(1, 3, 224, 224).cuda())).item()
             adversarial_example_attack_pixels = attack_pixels(model, image.view(1, 3, 224, 224), original_prediction)
             adversarial_prediction_pixels = torch.argmax(
                 model(adversarial_example_attack_pixels.view(1, 3, 224, 224).cuda())
             ).item()
+            save_image(adversarial_example_attack_pixels.view(3, 224, 224).cpu(),
+                       'results/images/blackbox_exmperiment/' + str(index) + '-pixels.jpg')
 
             adversarial_example_simba = simba_single(model, image.view(1, 3, 224, 224), 1)
             adversarial_prediction_simba = torch.argmax(
                 model(adversarial_example_simba[0].view(1, 3, 224, 224).cuda())
             ).item()
+            save_image(adversarial_example_simba.view(3, 224, 224).cpu(),
+                       'results/images/blackbox_exmperiment/' + str(index) + '-simba.jpg')
 
             if original_prediction != adversarial_prediction_pixels:
                 pixels_score += 1
             if original_prediction != adversarial_prediction_simba:
                 simba_score += 1
+            
+            index += 1
+            print('Iteration finished')
 
     print('Pixels score: ' + str(pixels_score))
     print('Simba score: ' + str(simba_score))
@@ -82,3 +91,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
