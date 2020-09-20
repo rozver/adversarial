@@ -12,11 +12,9 @@ def get_models_dict():
         'resnet18': torchvision.models.resnet18(pretrained=True).eval(),
         'resnet152': torchvision.models.resnet152(pretrained=True).eval(),
         'alexnet': torchvision.models.alexnet(pretrained=True).eval(),
-        'inception': torchvision.models.inception_v3(pretrained=True).eval(),
-        'googlenet': torchvision.models.googlenet(pretrained=True).eval(),
         'vgg16': torchvision.models.vgg16(pretrained=True).eval(),
         'vgg19': torchvision.models.vgg19(pretrained=True).eval(),
-        'squeezenet': torchvision.models.squeezenet1_1(pretrained=True).eval(),
+        'inception': torchvision.models.inception_v3(pretrained=True).eval(),
     }
 
     return models
@@ -83,7 +81,6 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--csv_location', type=str, required=True)
     parser.add_argument('--model', type=str, default='all')
-
     args = parser.parse_args()
 
     if os.path.exists(args.csv_location) and args.csv_location.endswith('.csv'):
