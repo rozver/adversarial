@@ -12,7 +12,7 @@ def show_row(images_batch, images_adversarial, labels_batch, labels_adversarial)
     show_image_row([images_batch.cpu(), images_adversarial.cpu()],
                    tlist=[[CLASS_DICT['ImageNet'][int(t)] for t in l] for l in [labels_batch, labels_adversarial]],
                    fontsize=15,
-                   filename='./adversarial_example_ImageNet.png')
+                   filename='./adversarial_example_imagenet.png')
 
 
 def save_images(original_batch, adversarial_batch, batch_index, location):
@@ -30,41 +30,53 @@ def save_images(original_batch, adversarial_batch, batch_index, location):
 
 
 def main():
-    IMAGES_LOCATION = 'results/images/'
-    CURRENT_TIME = str(datetime.datetime.now().strftime('%d-%m-%Y_%H:%M:%S'))
-    SAVE_LOCATION = IMAGES_LOCATION + CURRENT_TIME
-    os.mkdir(SAVE_LOCATION)
+    images_location = 'results/images/'
+    current_time = str(datetime.datetime.now().strftime('%d-%m-%Y_%H:%M:%S'))
+    save_location = images_location + current_time
+    os.mkdir(save_location)
 
     print('Enter mode type: rgb or grayscale')
     mode = input()
 
     if mode == 'grayscale':
-        imageset = (torch.load('./dataset/imagenet-dogs-images-grayscale-single.pt'))
+        imageset = (torch.load('./dataset/imagenet-airplanes-images-grayscale.pt'))
         image_loader = torch.utils.data.DataLoader(imageset, batch_size=4, num_workers=2)
-        labels = (torch.load('./dataset/imagenet-dogs-labels.pt'))
+        labels = (torch.load('./dataset/imagenet-airplanes-labels.pt'))
     else:
-        image_loader = (torch.load('./dataset/imagenet-dogs-images.pt'))
-        labels = (torch.load('./dataset/imagenet-dogs-labels.pt'))
+        imageset = (torch.load('./dataset/imagenet-airplanes-images.pt'))
+        image_loader = torch.utils.data.DataLoader(imageset, batch_size=4, num_workers=2)
+        labels = (torch.load('./dataset/imagenet-airplanes-labels.pt'))
 
     kwargs = {
         'constraint': 'inf',
-        'eps': 8.0/255.0,
-        'step_size': 1.0/255.0,
-        'iterations': 40,
+        'eps': 64/255.0,
+        'step_size': 1/255.0,
+        'iterations': 500,
         'do_tqdm': True,
-        #'est_grad': (1, 150)
     }
 
-    dataset = ImageNet('dataset/imagenet-dogs')
+    dataset = ImageNet('dataset/imagenet-airplanes')
 
     model, _ = make_and_restore_model(arch='resnet50', dataset=dataset,
                                       pytorch_pretrained=True)
     model = model.cuda()
 
     for batch_index, (images_batch, labels_batch) in enumerate(zip(image_loader, labels)):
+        images_batch = images_batch[:2]
+        labels_batch = labels_batch[:2]
+                
+        label = torch.LongTensor(2)
+        label[0] = 101
+        label[1] = 101
+
+        print(label)
+
+        print(images_batch.shape)
+        print(labels_batch.shape)
+
         _, images_adversarial = model(images_batch.cuda(), labels_batch.cuda(), make_adv=True, **kwargs)
         predictions, _ = model(images_adversarial)
-        save_images(images_batch, images_adversarial, batch_index, SAVE_LOCATION)
+        save_images(images_batch, images_adversarial, batch_index, save_location)
 
     print('Finished!')
 
