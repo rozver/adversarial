@@ -1,9 +1,9 @@
-import torch
-import torchvision
-from torchvision import transforms
-from PIL import Image
-import argparse
 import os
+import torch
+import argparse
+import torchvision
+from PIL import Image
+from torchvision import transforms
 
 
 def predict(x, model, is_tensor=True, use_gpu=False):
@@ -42,7 +42,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--image', type=str, required=True)
     args = parser.parse_args()
-    
+
     if os.path.exists(args.image):
         if args.image.endswith(('png', 'jpg', 'jpeg')):
             model = torchvision.models.resnet50(pretrained=True).eval()
