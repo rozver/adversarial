@@ -85,7 +85,7 @@ def main():
             print('Original prediction: ' + str(torch.argmax(original_predictions[index].cpu())))
             print('Adversarial prediction: ' + str(torch.argmax(adversarial_predictions[index].cpu())))
 
-    torch.save(results, 'results/sad.pt')
+    torch.save(results, 'results/eot_results.pt')
 
 
 if __name__ == '__main__':
