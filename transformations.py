@@ -32,7 +32,7 @@ class LightAdjustment:
         self.algorithm = algorithm
 
     def __call__(self, x):
-        light = torch.FloatTensor().new_full(x.size(), self.parameter)
+        light = torch.FloatTensor().new_full(x.size(), self.parameter).cuda()
         x = torch.add(x, light)
         return x
 
@@ -43,7 +43,7 @@ class Noise:
         self.algorithm = algorithm
 
     def __call__(self, x):
-        noise = torch.normal(mean=0.0, std=self.parameter, size=x.size())
+        noise = torch.normal(mean=0.0, std=self.parameter, size=x.size()).cuda()
         x = torch.add(x, noise).float()
         return x
 
@@ -68,19 +68,19 @@ class Rotation:
         else:
             sys.exit('Unknown rotation type!')
 
-        tensor = torch.zeros((new_dim_rows, new_dim_columns, 3))
+        tensor = torch.zeros((new_dim_rows, new_dim_columns, 3)).cuda()
 
         outer_matrix = torch.FloatTensor([[1, -tan],
-                                          [0, 1]])
+                                          [0, 1]]).cuda()
         inner_matrix = torch.FloatTensor([[1, 0],
-                                          [sin, 1]])
+                                          [sin, 1]]).cuda()
 
-        first_translation = torch.FloatTensor([int(-x.size(0) / 2), int(-x.size(1) / 2)])
-        second_translation = torch.FloatTensor([int(new_dim_rows / 2), int(new_dim_columns / 2)])
+        first_translation = torch.FloatTensor([int(-x.size(0) / 2), int(-x.size(1) / 2)]).cuda()
+        second_translation = torch.FloatTensor([int(new_dim_rows / 2), int(new_dim_columns / 2)]).cuda()
 
         for row in range(x.size(0)):
             for column in range(x.size(1)):
-                point_vector = torch.FloatTensor([row, column])
+                point_vector = torch.FloatTensor([row, column]).cuda()
 
                 point_vector = torch.add(point_vector, first_translation)
 
