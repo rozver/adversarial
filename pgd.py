@@ -1,8 +1,9 @@
 import torch
-import torchvision
 from pgd_attack_steps import LinfStep
 from transformations import Transformation
 import random
+import argparse
+from adversarial_transfer_models import get_model
 
 
 def get_random_transformation():
@@ -62,9 +63,18 @@ class Attacker:
 
 
 def main():
-    model = torchvision.models.resnet50(pretrained=True).cuda().eval()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--model', type=str, default='resnet50')
+    parser.add_argument('--dataset', type=str, default='dataset/imagenet-airplanes-images.pt')
+    parser.add_argument('--eps', type=float, default=8)
+    parser.add_argument('--step_size', type=float, default=1)
+    parser.add_argument('--num_iterations', type=int, default=500)
+    parser.add_argument('--save_file_name', type=str, default='results/eot_results_8.pt')
+    args = parser.parse_args()
 
-    dataset = torch.load('dataset/imagenet-airplanes-images.pt')
+    model = get_model(args.model).cuda()
+
+    dataset = torch.load(args.dataset)
     data_loader = torch.utils.data.DataLoader(dataset, batch_size=16, num_workers=2)
     results = []
 
@@ -73,9 +83,9 @@ def main():
         original_predictions = model(images_batch.cuda())
 
         adversarial_examples = attacker.get_adversarial_examples(original_predictions,
-                                                                 16/255.0,
-                                                                 1/255.0,
-                                                                 100,
+                                                                 args.eps/255.0,
+                                                                 args.step_size/255.0,
+                                                                 args.num_iterations,
                                                                  False)
         adversarial_predictions = model(adversarial_examples.cuda())
 
@@ -85,7 +95,7 @@ def main():
             print('Original prediction: ' + str(torch.argmax(original_predictions[index].cpu())))
             print('Adversarial prediction: ' + str(torch.argmax(adversarial_predictions[index].cpu())))
 
-    torch.save(results, 'results/eot_results.pt')
+    torch.save(results, args.save_file_name)
 
 
 if __name__ == '__main__':
