@@ -95,7 +95,7 @@ def main():
             print('Original prediction: ' + str(torch.argmax(original_predictions[index].cpu())))
             print('Adversarial prediction: ' + str(torch.argmax(adversarial_predictions[index].cpu())))
 
-    torch.save(results, args.save_file_name)
+    torch.save({'results': results, 'args': args}, args.save_file_name)
 
 
 if __name__ == '__main__':
