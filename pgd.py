@@ -6,6 +6,7 @@ from adversarial_transfer_models import get_models_dict
 import argparse
 import datetime
 
+TARGETED_CLASS = 934
 MODELS_DICT = get_models_dict()
 
 
@@ -55,12 +56,15 @@ class Attacker:
         self.loss = loss
 
     def get_adversarial_examples(self, target, args, random_start=False):
-        args.eps, args.step_size = args.eps/255.0, args.step_size/255.0
         adversarial_images = torch.FloatTensor(self.images_batch.size()).cuda()
         criterion = torch.nn.CrossEntropyLoss(reduction='none')
 
         for (index, current_image) in enumerate(self.images_batch):
             label = torch.argmax(target[index]).view(1)
+
+            if args.targeted:
+                label[0] = target[index]
+
             step = LinfStep(current_image, args.eps, args.step_size)
             if random_start:
                 current_image = step.random_perturb(current_image)
@@ -74,9 +78,9 @@ class Attacker:
                 x = x.clone().detach().requires_grad_(True)
 
                 if args.eot:
-                    loss = self.loss(self.model, criterion, t(x.cuda()).cuda(), label)
+                    loss = self.loss(self.model, criterion, t(x.cuda()).cuda(), label, args.targeted)
                 else:
-                    loss = self.loss(self.model, criterion, x.cuda(), label)
+                    loss = self.loss(self.model, criterion, x.cuda(), label, args.targeted)
 
                 loss.backward()
 
@@ -108,9 +112,12 @@ def main():
     parser.add_argument('--eps', type=float, default=8)
     parser.add_argument('--step_size', type=float, default=1)
     parser.add_argument('--iterations', type=int, default=500)
+    parser.add_argument('--targeted', type=bool, default=False)
     parser.add_argument('--eot', type=bool, default=False)
     parser.add_argument('--save_file_name', type=str, default='results/' + time + '.pt')
     args = parser.parse_args()
+
+    args.eps, args.step_size = args.eps / 255.0, args.step_size / 255.0
 
     model = MODELS_DICT.get(args.model).cuda()
 
@@ -121,17 +128,24 @@ def main():
     results = []
 
     for (batch_index, images_batch) in enumerate(data_loader):
+        images_batch = images_batch.cuda()
         attacker.images_batch = images_batch
-        original_predictions = model(images_batch.cuda())
 
-        adversarial_examples = attacker.get_adversarial_examples(original_predictions,
+        original_predictions = model(images_batch)
+
+        if not args.targeted:
+            target = original_predictions
+        else:
+            target = torch.ones(images_batch.size(0)).cuda() * TARGETED_CLASS
+
+        adversarial_examples = attacker.get_adversarial_examples(target,
                                                                  args,
                                                                  False)
         adversarial_predictions = model(adversarial_examples.cuda())
 
         results.append(adversarial_examples.cpu())
 
-        for index in range(len(original_predictions)):
+        for index in range(len(target)):
             print('Original prediction: ' + str(torch.argmax(original_predictions[index].cuda())))
             print('Adversarial prediction: ' + str(torch.argmax(adversarial_predictions[index].cuda())))
 
