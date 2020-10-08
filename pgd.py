@@ -114,7 +114,7 @@ def main():
 
     model = MODELS_DICT.get(args.model).cuda()
 
-    attacker = Attacker(None, model, transfer_loss)
+    attacker = Attacker(None, model, normal_loss)
 
     dataset = torch.load(args.dataset)
     data_loader = torch.utils.data.DataLoader(dataset, batch_size=16, num_workers=2)
