@@ -37,15 +37,16 @@ def transfer_loss(model, criterion,  x, label, targeted=False):
     if targeted:
         optimization_direction = -1
 
-    loss = torch.zeros([1]).cuda()
+    losses = torch.LongTensor([]).cuda()
+
     for model_key in MODELS_DICT.keys():
         current_model = MODELS_DICT.get(model_key).cuda().eval()
         prediction = current_model(x.view(1, 3, 224, 224))
         current_loss = criterion(prediction, label)
 
-        loss = torch.add(loss, optimization_direction*current_loss)
+        losses = torch.cat((losses, optimization_direction*current_loss))
 
-    loss = loss/(len(MODELS_DICT.keys()))
+    loss = torch.mean(losses)
     return loss
 
 
