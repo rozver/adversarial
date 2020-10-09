@@ -10,6 +10,10 @@ TARGETED_CLASS = 934
 MODELS_DICT = get_models_dict()
 
 
+def get_current_time():
+    return str(datetime.datetime.now().strftime('%d-%m-%Y_%H:%M:%S'))
+
+
 def get_random_transformation():
     transformation_types_list = ['rotation', 'noise', 'light']
     transformation_type = random.choice(transformation_types_list)
@@ -74,7 +78,7 @@ class Attacker:
             best_x = None
             x = current_image.clone().detach().requires_grad_(True)
 
-            for _ in range(args.iterations):
+            for _ in range(args.num_iterations):
                 t = get_random_transformation()
                 x = x.clone().detach().requires_grad_(True)
 
@@ -105,17 +109,17 @@ class Attacker:
 
 
 def main():
-    time = str(datetime.datetime.now().strftime('%d-%m-%Y_%H:%M:%S'))
+    time = get_current_time()
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', type=str, default='resnet50')
     parser.add_argument('--dataset', type=str, default='dataset/imagenet-airplanes-images.pt')
     parser.add_argument('--eps', type=float, default=8)
     parser.add_argument('--step_size', type=float, default=1)
-    parser.add_argument('--iterations', type=int, default=500)
+    parser.add_argument('--num_iterations', type=int, default=500)
     parser.add_argument('--targeted', type=bool, default=False)
     parser.add_argument('--eot', type=bool, default=False)
-    parser.add_argument('--save_file_name', type=str, default='results/' + time + '.pt')
+    parser.add_argument('--save_file_name', type=str, default='results/pgd-' + time + '.pt')
     args = parser.parse_args()
 
     args.eps, args.step_size = args.eps / 255.0, args.step_size / 255.0
