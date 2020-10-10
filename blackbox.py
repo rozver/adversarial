@@ -1,94 +1,126 @@
 import torch
-import torchvision
-from torchvision.utils import save_image
+from torch.nn.functional import softmax
+from adversarial_transfer_models import get_models_dict
+from pgd import get_current_time
+import argparse
+
+MODELS_DICT = get_models_dict()
 
 
-def get_original_pred_score(model, x, true_label):
-    output = model(x.cuda())
-    output = torch.nn.Softmax()(output)
-    prediction = output[0, true_label]
-    return prediction
+def get_probabilities(model, x, y):
+    prediction = model(x.unsqueeze(0).cuda())
+    prediction_softmax = softmax(prediction, 1)
+    prediction_softmax_y = prediction_softmax[0][y]
+
+    return prediction_softmax_y
 
 
-def attack_pixels(model, x, true_label, num_iters=10000, epsilon=0.6):
-    n_dims = x.view(-1).size(0)
-    perm = torch.randperm(n_dims)
-    last_prob = get_original_pred_score(model, x, true_label)
-    for i in range(num_iters):
-        diff = torch.zeros(n_dims)
-        diff[perm[i]] = epsilon
-        left_prob = get_original_pred_score(model, (x - diff.view(x.size())).clamp(0, 1), true_label)
-        if left_prob < last_prob:
-            x = (x - diff.view(x.size())).clamp(0, 1)
-            last_prob = left_prob
+def get_tensor_pixel_indices(pixel):
+    h = pixel % 224
+    pixel = pixel // 224
+    w = pixel % 224
+    pixel = pixel // 224
+    c = pixel % 3
+
+    return c, w, h
+
+
+def simba_pixels(model, x, y, args):
+    eps = args.eps / 255.0
+    delta = torch.zeros(x.size()).cuda()
+    q = torch.zeros(x.size()).cuda()
+
+    p = get_probabilities(model, x, y)
+    perm = torch.randperm(x.size(0) * x.size(1) * x.size(1))
+
+    for iteration, pixel in enumerate(perm):
+        if iteration == args.num_iterations:
+            break
+
+        c, w, h = get_tensor_pixel_indices(pixel)
+        q[c, w, h] = 1
+
+        p_prim_left = get_probabilities(model, (x + delta + eps * q).clamp(0, 1), y)
+
+        if p_prim_left < p:
+            delta = delta + eps * q
+            p = p_prim_left
+
         else:
-            right_prob = get_original_pred_score(model, (x + diff.view(x.size())).clamp(0, 1), true_label)
-            if right_prob < last_prob:
-                x = (x + diff.view(x.size())).clamp(0, 1)
-                last_prob = right_prob
-    return x
+            p_prim_right = get_probabilities(model, (x + delta - eps * q).clamp(0, 1), y)
+            if p_prim_right < p:
+                delta = delta - eps * q
+                p = p_prim_left
+
+        q[c, w, h] = 0
+
+    return delta
 
 
-def get_probs(model, x, y):
-    output = model(x.cuda()).cpu()
-    probs = torch.nn.Softmax()(output)[:, y]
-    return torch.diag(probs.data)
+def nes_gradient(model, x, y, sigma, n):
+    x_shape = x.size()
+    g = torch.zeros(x_shape).cuda()
+    mean = torch.zeros(x_shape).cuda()
+    std = torch.ones(x_shape).cuda()
+
+    for i in range(n):
+        u = torch.normal(mean, std).cuda()
+        pred = get_probabilities(model, (x+sigma*u).clamp(0, 1), y)
+        g = g + pred*u
+        pred = get_probabilities(model, (x-sigma*u).clamp(0, 1), y)
+        g = g - pred*u
+
+    return g/(2*n*sigma)
 
 
-def simba_single(model, x, y, num_iters=10000, epsilon=0.2):
-    n_dims = x.view(1, -1).size(1)
-    perm = torch.randperm(n_dims)
-    last_prob = get_probs(model, x, y)
-    for i in range(num_iters):
-        diff = torch.zeros(n_dims)
-        diff[perm[i]] = epsilon
-        left_prob = get_probs(model, (x - diff.view(x.size())).clamp(0, 1), y)
-        if left_prob < last_prob:
-            x = (x - diff.view(x.size())).clamp(0, 1)
-            last_prob = left_prob
-        else:
-            right_prob = get_probs(model, (x + diff.view(x.size())).clamp(0, 1), y)
-            if right_prob < last_prob:
-                x = (x + diff.view(x.size())).clamp(0, 1)
-                last_prob = right_prob
-    return x
+def fgsm_grad(image, grad, eps):
+    adversarial_example = image + eps*grad.sign()
+    return adversarial_example.detach()
 
 
 def main():
-    index = 0
-    pixels_score = 0
-    simba_score = 0
-    model = torchvision.models.resnet50(pretrained=True).cuda().eval()
-    data_loader = torch.load('dataset/imagenet-dogs-images.pt')
+    time = get_current_time()
 
-    for image in data_loader:
-            original_prediction = torch.argmax(model(image.view(1, 3, 224, 224).cuda())).item()
-            adversarial_example_attack_pixels = attack_pixels(model, image.view(1, 3, 224, 224), original_prediction)
-            adversarial_prediction_pixels = torch.argmax(
-                model(adversarial_example_attack_pixels.view(1, 3, 224, 224).cuda())
-            ).item()
-            save_image(adversarial_example_attack_pixels.view(3, 224, 224).cpu(),
-                       'results/images/blackbox_exmperiment/' + str(index) + '-pixels.jpg')
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--model', type=str, default='resnet50')
+    parser.add_argument('--dataset', type=str, default='dataset/imagenet-airplanes-images.pt')
+    parser.add_argument('--eps', type=float, default=8)
+    parser.add_argument('--num_iterations', type=int, default=10000)
+    parser.add_argument('--save_file_name', type=str, default='results/blackbox-' + time + '.pt')
+    args = parser.parse_args()
 
-            adversarial_example_simba = simba_single(model, image.view(1, 3, 224, 224), 1)
-            adversarial_prediction_simba = torch.argmax(
-                model(adversarial_example_simba[0].view(1, 3, 224, 224).cuda())
-            ).item()
-            save_image(adversarial_example_simba.view(3, 224, 224).cpu(),
-                       'results/images/blackbox_exmperiment/' + str(index) + '-simba.jpg')
+    model = MODELS_DICT.get(args.model).cuda()
+    dataset = torch.load(args.dataset)
 
-            if original_prediction != adversarial_prediction_pixels:
-                pixels_score += 1
-            if original_prediction != adversarial_prediction_simba:
-                simba_score += 1
-            
-            index += 1
-            print('Iteration finished')
+    adversarial_examples_nes_list = []
+    adversarial_examples_simba_list = []
+    predictions_nes = []
+    predictions_simba = []
 
-    print('Pixels score: ' + str(pixels_score))
-    print('Simba score: ' + str(simba_score))
+    for image in dataset:
+        original_prediction = model(image.cuda().unsqueeze(0))
+        label = torch.argmax(original_prediction)
+
+        grad = nes_gradient(model, image.cuda(), label, args.eps/255.0, args.num_iterations)
+        adversarial_example_nes = fgsm_grad(image.cuda(), grad, args.eps/255.0)
+
+        delta = simba_pixels(model, image.cuda(), label.cuda(), args)
+        adversarial_example_simba = image.cuda() + delta
+
+        adversarial_predictions_nes = torch.argmax(model(adversarial_example_nes.unsqueeze(0)))
+        adversarial_predictions_simba = torch.argmax(model(adversarial_example_simba.unsqueeze(0)))
+
+        adversarial_examples_nes_list.append(adversarial_example_nes.cpu())
+        adversarial_examples_simba_list.append(adversarial_example_simba.cpu())
+
+        predictions_nes.append({'original': original_prediction, 'adversarial': adversarial_predictions_nes})
+        predictions_simba.append({'original': original_prediction, 'adversarial': adversarial_predictions_simba})
+
+    torch.save({'nes': zip(adversarial_examples_nes_list, predictions_nes),
+                'simba': zip(adversarial_examples_simba_list, predictions_simba),
+                'args': args},
+               args.save_file_name)
 
 
 if __name__ == '__main__':
     main()
-
