@@ -32,10 +32,10 @@ def normal_loss(model, criterion, x, label, targeted=False):
     if targeted:
         optimization_direction = -1
 
-    return optimization_direction*criterion(prediction, label)
+    return optimization_direction * criterion(prediction, label)
 
 
-def transfer_loss(model, criterion,  x, label, targeted=False):
+def transfer_loss(model, criterion, x, label, targeted=False):
     optimization_direction = 1
 
     if targeted:
@@ -48,44 +48,45 @@ def transfer_loss(model, criterion,  x, label, targeted=False):
         prediction = current_model(x.view(1, 3, 224, 224))
         current_loss = criterion(prediction, label)
 
-        losses = torch.cat((losses, optimization_direction*current_loss))
+        losses = torch.cat((losses, optimization_direction * current_loss))
 
     loss = torch.mean(losses)
     return loss
 
 
 class Attacker:
-    def __init__(self, images_batch, model, loss=normal_loss):
+    def __init__(self, images_batch, model, args, loss=normal_loss):
         self.images_batch = images_batch
         self.model = model
+        self.args = args
         self.loss = loss
 
-    def get_adversarial_examples(self, target, args, random_start=False):
+    def get_adversarial_examples(self, target, random_start=False):
         adversarial_images = torch.FloatTensor(self.images_batch.size()).cuda()
         criterion = torch.nn.CrossEntropyLoss(reduction='none')
 
         for (index, current_image) in enumerate(self.images_batch):
-            label = torch.argmax(target[index]).view(1)
+            best_loss = None
+            best_x = None
 
-            if args.targeted:
-                label[0] = target[index]
-
-            step = LinfStep(current_image, args.eps, args.step_size)
+            step = LinfStep(current_image, self.args.eps, self.args.step_size)
             if random_start:
                 current_image = step.random_perturb(current_image)
 
-            best_loss = None
-            best_x = None
+            label = torch.argmax(target[index]).view(1)
+            if self.args.targeted:
+                label[0] = target[index]
+
             x = current_image.clone().detach().requires_grad_(True)
 
-            for _ in range(args.num_iterations):
+            for _ in range(self.args.num_iterations):
                 t = get_random_transformation()
                 x = x.clone().detach().requires_grad_(True)
 
-                if args.eot:
-                    loss = self.loss(self.model, criterion, t(x.cuda()).cuda(), label, args.targeted)
+                if self.args.eot:
+                    loss = self.loss(self.model, criterion, t(x.cuda()).cuda(), label, self.args.targeted)
                 else:
-                    loss = self.loss(self.model, criterion, x.cuda(), label, args.targeted)
+                    loss = self.loss(self.model, criterion, x.cuda(), label, self.args.targeted)
 
                 loss.backward()
 
@@ -119,6 +120,7 @@ def main():
     parser.add_argument('--num_iterations', type=int, default=500)
     parser.add_argument('--targeted', type=bool, default=False)
     parser.add_argument('--eot', type=bool, default=False)
+    parser.add_argument('--transfer', type=bool, default=False)
     parser.add_argument('--save_file_name', type=str, default='results/pgd-' + time + '.pt')
     args = parser.parse_args()
 
@@ -126,11 +128,15 @@ def main():
 
     model = MODELS_DICT.get(args.model).cuda()
 
-    attacker = Attacker(None, model, normal_loss)
+    attacker = Attacker(None, model, args, normal_loss)
+
+    if args.tranfer:
+        attacker.loss = transfer_loss
 
     dataset = torch.load(args.dataset)
     data_loader = torch.utils.data.DataLoader(dataset, batch_size=16, num_workers=2)
-    results = []
+    adversarial_examples_list = []
+    predictions_list = []
 
     for (batch_index, images_batch) in enumerate(data_loader):
         images_batch = images_batch.cuda()
@@ -143,18 +149,18 @@ def main():
         else:
             target = torch.ones(images_batch.size(0)).cuda() * TARGETED_CLASS
 
-        adversarial_examples = attacker.get_adversarial_examples(target,
-                                                                 args,
-                                                                 False)
+        adversarial_examples = attacker.get_adversarial_examples(target, False)
+
         adversarial_predictions = model(adversarial_examples.cuda())
 
-        results.append(adversarial_examples.cpu())
+        adversarial_examples_list.append(adversarial_examples.cpu())
+        predictions_list.append({'original': original_predictions.cpu(),
+                                 'adversarial': adversarial_predictions.cpu()})
 
-        for index in range(len(target)):
-            print('Original prediction: ' + str(torch.argmax(original_predictions[index].cuda())))
-            print('Adversarial prediction: ' + str(torch.argmax(adversarial_predictions[index].cuda())))
-
-    torch.save({'results': results, 'args': args}, args.save_file_name)
+    torch.save({'adversarial_examples': adversarial_examples_list,
+                'predictions': predictions_list,
+                'args': args},
+               args.save_file_name)
 
 
 if __name__ == '__main__':
