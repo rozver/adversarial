@@ -104,17 +104,17 @@ def main():
         grad = nes_gradient(model, image.cuda(), label, args.eps/255.0, args.num_iterations)
         adversarial_example_nes = fgsm_grad(image.cuda(), grad, args.eps/255.0)
 
-        delta = simba_pixels(model, image.cuda(), label.cuda(), args)
-        adversarial_example_simba = image.cuda() + delta
+        # delta = simba_pixels(model, image.cuda(), label.cuda(), args)
+        # adversarial_example_simba = image.cuda() + delta
 
         adversarial_predictions_nes = torch.argmax(model(adversarial_example_nes.unsqueeze(0)))
-        adversarial_predictions_simba = torch.argmax(model(adversarial_example_simba.unsqueeze(0)))
+        # adversarial_predictions_simba = torch.argmax(model(adversarial_example_simba.unsqueeze(0)))
 
         adversarial_examples_nes_list.append(adversarial_example_nes.cpu())
-        adversarial_examples_simba_list.append(adversarial_example_simba.cpu())
+        # adversarial_examples_simba_list.append(adversarial_example_simba.cpu())
 
         predictions_nes.append({'original': original_prediction, 'adversarial': adversarial_predictions_nes})
-        predictions_simba.append({'original': original_prediction, 'adversarial': adversarial_predictions_simba})
+        # predictions_simba.append({'original': original_prediction, 'adversarial': adversarial_predictions_simba})
 
     torch.save({'nes': zip(adversarial_examples_nes_list, predictions_nes),
                 'simba': zip(adversarial_examples_simba_list, predictions_simba),
