@@ -48,7 +48,7 @@ def transfer_loss(model, criterion, x, label, targeted=False):
         prediction = current_model(x.view(1, 3, 224, 224))
         current_loss = criterion(prediction, label)
 
-        losses = torch.cat((losses, torch.LongTensor([optimization_direction * current_loss])))
+        losses = torch.cat((losses, torch.LongTensor([optimization_direction * current_loss]).cuda()))
 
     loss = torch.mean(losses)
     return loss
