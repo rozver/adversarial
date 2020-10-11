@@ -8,7 +8,7 @@ MODELS_DICT = get_models_dict()
 
 
 def get_probabilities(model, x, y):
-    prediction = model(x.unsqueeze(0).cuda())
+    prediction = model(x.unsqueeze(0).cpu())
     prediction_softmax = softmax(prediction, 1)
     prediction_softmax_y = prediction_softmax[0][y]
 
@@ -27,8 +27,8 @@ def get_tensor_pixel_indices(pixel):
 
 def simba_pixels(model, x, y, args):
     eps = args.eps / 255.0
-    delta = torch.zeros(x.size()).cuda()
-    q = torch.zeros(x.size()).cuda()
+    delta = torch.zeros(x.size()).cpu()
+    q = torch.zeros(x.size()).cpu()
 
     p = get_probabilities(model, x, y)
     perm = torch.randperm(x.size(0) * x.size(1) * x.size(1))
@@ -59,12 +59,12 @@ def simba_pixels(model, x, y, args):
 
 def nes_gradient(model, x, y, sigma, n):
     x_shape = x.size()
-    g = torch.zeros(x_shape).cuda()
-    mean = torch.zeros(x_shape).cuda()
-    std = torch.ones(x_shape).cuda()
+    g = torch.zeros(x_shape).cpu()
+    mean = torch.zeros(x_shape).cpu()
+    std = torch.ones(x_shape).cpu()
 
     for i in range(n):
-        u = torch.normal(mean, std).cuda()
+        u = torch.normal(mean, std).cpu()
         pred = get_probabilities(model, (x+sigma*u).clamp(0, 1), y)
         g = g + pred*u
         pred = get_probabilities(model, (x-sigma*u).clamp(0, 1), y)
@@ -89,7 +89,7 @@ def main():
     parser.add_argument('--save_file_name', type=str, default='results/blackbox-' + time + '.pt')
     args = parser.parse_args()
 
-    model = MODELS_DICT.get(args.model).cuda()
+    model = MODELS_DICT.get(args.model).cpu()
     dataset = torch.load(args.dataset)
 
     adversarial_examples_nes_list = []
@@ -98,14 +98,14 @@ def main():
     predictions_simba = []
 
     for image in dataset:
-        original_prediction = model(image.cuda().unsqueeze(0))
+        original_prediction = model(image.cpu().unsqueeze(0))
         label = torch.argmax(original_prediction)
 
-        grad = nes_gradient(model, image.cuda(), label, args.eps/255.0, args.num_iterations)
-        adversarial_example_nes = fgsm_grad(image.cuda(), grad, args.eps/255.0)
+        grad = nes_gradient(model, image.cpu(), label, args.eps/255.0, args.num_iterations)
+        adversarial_example_nes = fgsm_grad(image.cpu(), grad, args.eps/255.0)
 
-        # delta = simba_pixels(model, image.cuda(), label.cuda(), args)
-        # adversarial_example_simba = image.cuda() + delta
+        # delta = simba_pixels(model, image.cpu(), label.cpu(), args)
+        # adversarial_example_simba = image.cpu() + delta
 
         adversarial_predictions_nes = torch.argmax(model(adversarial_example_nes.unsqueeze(0)))
         # adversarial_predictions_simba = torch.argmax(model(adversarial_example_simba.unsqueeze(0)))
