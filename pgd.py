@@ -130,7 +130,7 @@ def main():
 
     attacker = Attacker(None, model, args, normal_loss)
 
-    if args.tranfer:
+    if args.transfer:
         attacker.loss = transfer_loss
 
     dataset = torch.load(args.dataset)
