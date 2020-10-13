@@ -100,7 +100,7 @@ class Translation(Transformation):
         x = x.permute(1, 2, 0)
 
         output_tensor = torch.zeros(x.size())
-        translation = torch.round(torch.FloatTensor([self.parameter[0], self.parameter[1]]).cuda())
+        translation = torch.round(torch.FloatTensor([parameter for parameter in self.parameter]).cuda())
 
         for row in range(x.size(0)):
             for column in range(x.size(1)):
@@ -174,7 +174,7 @@ class Rotation(Transformation):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--image', type=str, required=True)
-    parser.add_argument('--transformation_type', type=str, default='rotation')
+    parser.add_argument('--transformation_type', type=str, default='translation')
     args = parser.parse_args()
 
     image = Image.open(args.image)
