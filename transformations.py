@@ -108,7 +108,8 @@ class Translation(Transformation):
 
                 new_point_vector = torch.add(point_vector, translation)
 
-                new_row, new_column = new_point_vector[0].int().item(), new_point_vector[1].int().item()
+                new_row = new_point_vector[0].int().item()
+                new_column = new_point_vector[1].int().item()
 
                 if x.size(0) > new_row >= 0 and 0 <= new_column < x.size(1):
                     output_tensor[new_row, new_column] = x[row, column]
