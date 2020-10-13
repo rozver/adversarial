@@ -6,6 +6,7 @@ from matplotlib import pyplot as plt
 import sys
 import argparse
 
+
 def plot(image):
     if image.size(0) == 3:
         plt.imshow(image.permute(1, 2, 0))
@@ -17,13 +18,26 @@ def plot(image):
 
 def get_transformation_bounds_dict():
     bounds_dict = {
-        'rotation': [-35, 35],
         'light': [-0.1, 0.1],
         'noise': [0.0, 0.05],
-        'translation': [-10.0, 10.0]
+        'translation': [-10.0, 10.0],
+        'rotation': [-35, 35],
     }
 
     return bounds_dict
+
+
+def get_transformation(transformation_type):
+    if transformation_type == 'light':
+        return LightAdjustment()
+    elif transformation_type == 'noise':
+        return Noise()
+    elif transformation_type == 'translation':
+        return Translation()
+    elif transformation_type == 'rotation':
+        return Rotation()
+    else:
+        raise ValueError
 
 
 class Transformation:
@@ -166,7 +180,7 @@ def main():
     transforms = torchvision.transforms.ToTensor()
     image = transforms(image)
 
-    transformation = Translation()
+    transformation = get_transformation(args.transformation_type)
     transformation.set_random_parameter()
     image = transformation(image.cuda())
 
