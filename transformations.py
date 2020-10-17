@@ -99,7 +99,7 @@ class Translation(Transformation):
     def transform(self, x):
         x = x.permute(1, 2, 0)
 
-        output_tensor = torch.zeros(x.size())
+        output_tensor = torch.ones(x.size())
         translation = torch.round(torch.FloatTensor([parameter for parameter in self.parameter]).cuda())
 
         for row in range(x.size(0)):
