@@ -1,5 +1,5 @@
 import torch
-from pgd_attack_steps import LinfStep
+from pgd_attack_steps import LinfStep, L2Step
 from transformations import Transformation
 import random
 from adversarial_transfer_models import get_models_dict
@@ -55,11 +55,19 @@ def transfer_loss(model, criterion, x, label, targeted=False):
 
 
 class Attacker:
-    def __init__(self, images_batch, model, args, loss=normal_loss):
+    def __init__(self, images_batch, model, args, loss=normal_loss, attack_step=LinfStep):
         self.images_batch = images_batch
         self.model = model
         self.args = args
+
+        if args.transfer:
+            loss = transfer_loss
+
+        if args.norm == 'l2':
+            attack_step = L2Step
+
         self.loss = loss
+        self.attack_step = attack_step
 
     def get_adversarial_examples(self, target, random_start=False):
         adversarial_images = torch.FloatTensor(self.images_batch.size()).cuda()
@@ -69,7 +77,7 @@ class Attacker:
             best_loss = None
             best_x = None
 
-            step = LinfStep(current_image, self.args.eps, self.args.step_size)
+            step = self.attack_step(current_image, self.args.eps, self.args.step_size)
             if random_start:
                 current_image = step.random_perturb(current_image)
 
@@ -116,6 +124,7 @@ def main():
     parser.add_argument('--model', type=str, default='resnet50')
     parser.add_argument('--dataset', type=str, default='dataset/imagenet-airplanes-images.pt')
     parser.add_argument('--eps', type=float, default=8)
+    parser.add_argument('--norm', type=str, default='linf')
     parser.add_argument('--step_size', type=float, default=1)
     parser.add_argument('--num_iterations', type=int, default=500)
     parser.add_argument('--targeted', type=bool, default=False)
@@ -128,10 +137,7 @@ def main():
 
     model = MODELS_DICT.get(args.model).cuda()
 
-    attacker = Attacker(None, model, args, normal_loss)
-
-    if args.transfer:
-        attacker.loss = transfer_loss
+    attacker = Attacker(None, model, args)
 
     dataset = torch.load(args.dataset)
     data_loader = torch.utils.data.DataLoader(dataset, batch_size=16, num_workers=2)
