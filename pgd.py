@@ -1,6 +1,5 @@
 import torch
 from pgd_attack_steps import LinfStep, L2Step
-from transformations import Transformation
 import random
 from adversarial_transfer_models import get_models_dict
 from transformations import get_transformation
