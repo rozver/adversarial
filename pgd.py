@@ -3,6 +3,7 @@ from pgd_attack_steps import LinfStep, L2Step
 from transformations import Transformation
 import random
 from adversarial_transfer_models import get_models_dict
+from transformations import get_transformation
 import argparse
 import datetime
 
@@ -18,7 +19,7 @@ def get_random_transformation():
     transformation_types_list = ['rotation', 'noise', 'light', 'translation']
     transformation_type = random.choice(transformation_types_list)
 
-    t = Transformation(transformation_type)
+    t = get_transformation(transformation_type)
     t.set_random_parameter()
 
     return t
