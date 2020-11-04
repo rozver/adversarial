@@ -15,7 +15,7 @@ def get_current_time():
 
 
 def get_random_transformation():
-    transformation_types_list = ['rotation', 'noise', 'light']
+    transformation_types_list = ['rotation', 'noise', 'light', 'translation']
     transformation_type = random.choice(transformation_types_list)
 
     t = Transformation(transformation_type)
