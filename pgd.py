@@ -130,7 +130,7 @@ def main():
     parser.add_argument('--targeted', type=bool, default=False)
     parser.add_argument('--eot', type=bool, default=False)
     parser.add_argument('--transfer', type=bool, default=False)
-    parser.add_argument('--save_file_name', type=str, default='results/pgd-' + time + '.pt')
+    parser.add_argument('--save_file_name', type=str, default='results/pgd_new_experiments/pgd-' + time + '.pt')
     args = parser.parse_args()
 
     args.eps, args.step_size = args.eps / 255.0, args.step_size / 255.0
