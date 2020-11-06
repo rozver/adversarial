@@ -5,6 +5,7 @@ from adversarial_transfer_models import get_models_dict
 from transformations import get_transformation
 import argparse
 import datetime
+import torchvision
 
 TARGETED_CLASS = 934
 MODELS_DICT = get_models_dict()
@@ -135,7 +136,7 @@ def main():
 
     args.eps, args.step_size = args.eps / 255.0, args.step_size / 255.0
 
-    model = MODELS_DICT.get(args.model).cuda()
+    model = torchvision.models.resnet50(pretrained=True).cuda().eval()
 
     attacker = Attacker(None, model, args)
 
