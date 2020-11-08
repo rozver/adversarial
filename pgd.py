@@ -56,8 +56,7 @@ def transfer_loss(model, criterion, x, label, targeted=False):
 
 
 class Attacker:
-    def __init__(self, images_batch, model, args, loss=normal_loss, attack_step=LinfStep):
-        self.images_batch = images_batch
+    def __init__(self, model, args, loss=normal_loss, attack_step=LinfStep, masks_batch=None):
         self.model = model
         self.args = args
 
@@ -67,55 +66,55 @@ class Attacker:
         if args.norm == 'l2':
             attack_step = L2Step
 
+        self.masks_batch = masks_batch
+
         self.loss = loss
+        self.criterion = torch.nn.CrossEntropyLoss(reduction='none')
         self.attack_step = attack_step
 
-    def get_adversarial_examples(self, target, random_start=False):
-        adversarial_images = torch.FloatTensor(self.images_batch.size()).cuda()
-        criterion = torch.nn.CrossEntropyLoss(reduction='none')
+    def __call__(self, image, target, random_start=False):
+        best_loss = None
+        best_x = None
 
-        for (index, current_image) in enumerate(self.images_batch):
-            best_loss = None
-            best_x = None
+        step = self.attack_step(image, self.args.eps, self.args.step_size)
 
-            step = self.attack_step(current_image, self.args.eps, self.args.step_size)
-            if random_start:
-                current_image = step.random_perturb(current_image)
+        if random_start:
+            image = step.random_perturb(image)
 
-            label = torch.argmax(target[index]).view(1)
-            if self.args.targeted:
-                label[0] = target[index]
+        label = torch.argmax(target).view(1)
+        if self.args.targeted:
+            label[0] = target
 
-            x = current_image.clone().detach().requires_grad_(True)
+        x = image.clone().detach().requires_grad_(True)
 
-            for _ in range(self.args.num_iterations):
-                t = get_random_transformation()
-                x = x.clone().detach().requires_grad_(True)
+        for _ in range(self.args.num_iterations):
+            t = get_random_transformation()
+            x = x.clone().detach().requires_grad_(True)
 
-                if self.args.eot:
-                    loss = self.loss(self.model, criterion, t(x.cuda()).cuda(), label, self.args.targeted)
-                else:
-                    loss = self.loss(self.model, criterion, x.cuda(), label, self.args.targeted)
+            if self.args.eot:
+                loss = self.loss(self.model, self.criterion, t(x.cuda()).cuda(), label, self.args.targeted)
+            else:
+                loss = self.loss(self.model, self.criterion, x.cuda(), label, self.args.targeted)
 
-                loss.backward()
+            loss.backward()
 
-                grads = x.grad.detach().clone()
-                x.grad.zero_()
+            grads = x.grad.detach().clone()
+            x.grad.zero_()
 
-                if best_loss is not None:
-                    if best_loss < loss:
-                        best_loss = loss
-                        best_x = x.clone().detach()
-                else:
-                    best_loss = loss.clone().detach()
+            grads_with_mask = grads
+
+            if best_loss is not None:
+                if best_loss < loss:
+                    best_loss = loss
                     best_x = x.clone().detach()
+            else:
+                best_loss = loss.clone().detach()
+                best_x = x.clone().detach()
 
-                x = step.step(x, grads)
-                x = step.project(x)
+            x = step.step(x, grads_with_mask)
+            x = step.project(x)
 
-            adversarial_images[index] = best_x
-
-        return adversarial_images.detach()
+        return best_x
 
 
 def main():
@@ -127,10 +126,11 @@ def main():
     parser.add_argument('--eps', type=float, default=8)
     parser.add_argument('--norm', type=str, default='linf')
     parser.add_argument('--step_size', type=float, default=1)
-    parser.add_argument('--num_iterations', type=int, default=500)
+    parser.add_argument('--num_iterations', type=int, default=50)
     parser.add_argument('--targeted', type=bool, default=False)
     parser.add_argument('--eot', type=bool, default=False)
     parser.add_argument('--transfer', type=bool, default=False)
+    parser.add_argument('--mask', type=bool, default=True)
     parser.add_argument('--save_file_name', type=str, default='results/pgd_new_experiments/pgd-' + time + '.pt')
     args = parser.parse_args()
 
@@ -138,31 +138,27 @@ def main():
 
     model = torchvision.models.resnet50(pretrained=True).cuda().eval()
 
-    attacker = Attacker(None, model, args)
+    attacker = Attacker(model, args)
 
     dataset = torch.load(args.dataset)
-    data_loader = torch.utils.data.DataLoader(dataset, batch_size=16, num_workers=2)
+
     adversarial_examples_list = []
     predictions_list = []
 
-    for (batch_index, images_batch) in enumerate(data_loader):
-        images_batch = images_batch.cuda()
-        attacker.images_batch = images_batch
-
-        original_predictions = model(images_batch)
+    for (batch_index, image) in enumerate(dataset):
+        original_prediction = model(image.unsqueeze(0).cuda())
 
         if not args.targeted:
-            target = original_predictions
+            target = original_prediction
         else:
-            target = torch.ones(images_batch.size(0)).cuda() * TARGETED_CLASS
+            target = torch.FloatTensor([TARGETED_CLASS]).cuda()
 
-        adversarial_examples = attacker.get_adversarial_examples(target, False)
+        adversarial_example = attacker(image, target, True)
+        adversarial_prediction = model(adversarial_example.unsqueeze(0).cuda())
 
-        adversarial_predictions = model(adversarial_examples.cuda())
-
-        adversarial_examples_list.append(adversarial_examples.cpu())
-        predictions_list.append({'original': original_predictions.cpu(),
-                                 'adversarial': adversarial_predictions.cpu()})
+        adversarial_examples_list.append(adversarial_example.cpu())
+        predictions_list.append({'original': original_prediction.cpu(),
+                                 'adversarial': adversarial_prediction.cpu()})
 
     torch.save({'adversarial_examples': adversarial_examples_list,
                 'predictions': predictions_list,
