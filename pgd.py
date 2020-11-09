@@ -26,7 +26,7 @@ def get_random_transformation():
 
 
 def normal_loss(model, criterion, x, label, targeted=False):
-    prediction = model(x.view(1, 3, 224, 224))
+    prediction = model(x.unsqueeze(0))
 
     optimization_direction = 1
 
@@ -46,7 +46,7 @@ def transfer_loss(model, criterion, x, label, targeted=False):
 
     for model_key in MODELS_DICT.keys():
         current_model = MODELS_DICT.get(model_key).cuda().eval()
-        prediction = current_model(x.view(1, 3, 224, 224))
+        prediction = current_model(x.unsqueeze(0))
         current_loss = criterion(prediction, label)
 
         loss = torch.add(loss, optimization_direction*current_loss)
@@ -72,7 +72,7 @@ class Attacker:
         self.criterion = torch.nn.CrossEntropyLoss(reduction='none')
         self.attack_step = attack_step
 
-    def __call__(self, image, target, random_start=False):
+    def __call__(self, image, mask, target, random_start=False):
         best_loss = None
         best_x = None
 
@@ -101,7 +101,7 @@ class Attacker:
             grads = x.grad.detach().clone()
             x.grad.zero_()
 
-            grads_with_mask = grads
+            grads_with_mask = grads*mask
 
             if best_loss is not None:
                 if best_loss < loss:
@@ -123,14 +123,14 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', type=str, default='resnet50')
     parser.add_argument('--dataset', type=str, default='dataset/imagenet-airplanes-images.pt')
+    parser.add_argument('--masks', type=bool, default=False)
     parser.add_argument('--eps', type=float, default=8)
     parser.add_argument('--norm', type=str, default='linf')
     parser.add_argument('--step_size', type=float, default=1)
-    parser.add_argument('--num_iterations', type=int, default=50)
+    parser.add_argument('--num_iterations', type=int, default=100)
     parser.add_argument('--targeted', type=bool, default=False)
     parser.add_argument('--eot', type=bool, default=False)
     parser.add_argument('--transfer', type=bool, default=False)
-    parser.add_argument('--mask', type=bool, default=True)
     parser.add_argument('--save_file_name', type=str, default='results/pgd_new_experiments/pgd-' + time + '.pt')
     args = parser.parse_args()
 
@@ -140,12 +140,16 @@ def main():
 
     attacker = Attacker(model, args)
 
-    dataset = torch.load(args.dataset)
+    if args.masks:
+        images, masks = torch.load(args.dataset)
+    else:
+        images = torch.load(args.dataset)
+        masks = [torch.ones((1, images[0].size(1), images[0].size(2)))]*images.__len__()
 
     adversarial_examples_list = []
     predictions_list = []
 
-    for (batch_index, image) in enumerate(dataset):
+    for (image_index, image) in enumerate(images):
         original_prediction = model(image.unsqueeze(0).cuda())
 
         if not args.targeted:
@@ -153,7 +157,7 @@ def main():
         else:
             target = torch.FloatTensor([TARGETED_CLASS]).cuda()
 
-        adversarial_example = attacker(image, target, True)
+        adversarial_example = attacker(image, masks[image_index], target, True)
         adversarial_prediction = model(adversarial_example.unsqueeze(0).cuda())
 
         adversarial_examples_list.append(adversarial_example.cpu())
