@@ -9,16 +9,18 @@ import os
 def get_coco_images_and_masks(location, category):
     transform = transforms.ToTensor()
 
-    images_and_masks = []
+    images = []
+    masks = []
+
     annotations_file_location = os.path.join(location, 'annotations/instances_val2017.json')
     images_folder_location = os.path.join(location, 'images/val2017')
     coco = COCO(annotations_file_location)
 
     cat_ids = coco.getCatIds(catNms=category)
     img_ids = coco.getImgIds(catIds=cat_ids)
-    images = coco.loadImgs(img_ids)
+    images_paths = coco.loadImgs(img_ids)
 
-    for image in images:
+    for image in images_paths:
         annotations_ids = coco.getAnnIds(imgIds=image['id'], catIds=cat_ids, iscrowd=None)
         annotations = coco.loadAnns(annotations_ids)
 
@@ -31,9 +33,11 @@ def get_coco_images_and_masks(location, category):
             mask += coco.annToMask(annotations[i])
 
         mask = torch.from_numpy(mask)
-        images_and_masks.append([image_tensor, mask])
 
-    return images_and_masks
+        images.append(image_tensor)
+        masks.append(mask)
+
+    return [images, masks]
 
 
 def main():
