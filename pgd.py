@@ -127,7 +127,7 @@ def main():
     parser.add_argument('--eps', type=float, default=8)
     parser.add_argument('--norm', type=str, default='linf')
     parser.add_argument('--step_size', type=float, default=1)
-    parser.add_argument('--num_iterations', type=int, default=100)
+    parser.add_argument('--num_iterations', type=int, default=50)
     parser.add_argument('--targeted', type=bool, default=False)
     parser.add_argument('--eot', type=bool, default=False)
     parser.add_argument('--transfer', type=bool, default=False)
