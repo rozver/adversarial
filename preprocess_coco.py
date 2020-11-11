@@ -4,6 +4,7 @@ from pycocotools.coco import COCO
 from PIL import Image
 import argparse
 import os
+import numpy as np
 
 
 def get_coco_images_and_masks(location, category):
@@ -30,7 +31,7 @@ def get_coco_images_and_masks(location, category):
         mask = coco.annToMask(annotations[0])
 
         for i in range(len(annotations)):
-            mask += coco.annToMask(annotations[i])
+            mask = np.maximum(coco.annToMask(annotations[i]), mask)
 
         mask = torch.from_numpy(mask)
 

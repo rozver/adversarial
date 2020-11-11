@@ -134,8 +134,6 @@ def main():
     parser.add_argument('--save_file_name', type=str, default='results/pgd_new_experiments/pgd-' + time + '.pt')
     args = parser.parse_args()
 
-    print(args)
-
     args.eps, args.step_size = args.eps / 255.0, args.step_size / 255.0
 
     model = torchvision.models.resnet50(pretrained=True).cuda().eval()
