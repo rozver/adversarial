@@ -26,7 +26,7 @@ def get_random_transformation():
 
 
 def normal_loss(model, criterion, x, label, targeted=False):
-    prediction = model(x.unsqueeze(0))
+    prediction = model(x.cpu().unsqueeze(0))
 
     optimization_direction = 1
 
@@ -45,8 +45,8 @@ def transfer_loss(model, criterion, x, label, targeted=False):
     loss = torch.zeros([1]).cuda()
 
     for model_key in MODELS_DICT.keys():
-        current_model = MODELS_DICT.get(model_key).cuda().eval()
-        prediction = current_model(x.unsqueeze(0))
+        current_model = MODELS_DICT.get(model_key).cpu().eval()
+        prediction = current_model(x.cpu().unsqueeze(0))
         current_loss = criterion(prediction, label)
 
         loss = torch.add(loss, optimization_direction*current_loss)
@@ -136,7 +136,7 @@ def main():
 
     args.eps, args.step_size = args.eps / 255.0, args.step_size / 255.0
 
-    model = torchvision.models.resnet50(pretrained=True).cuda().eval()
+    model = torchvision.models.resnet50(pretrained=True).cpu().eval()
 
     attacker = Attacker(model, args)
 
@@ -150,7 +150,7 @@ def main():
     predictions_list = []
 
     for (image_index, image) in enumerate(images):
-        original_prediction = model(image.unsqueeze(0).cuda())
+        original_prediction = model(image.unsqueeze(0).cpu())
 
         if not args.targeted:
             target = original_prediction
@@ -158,7 +158,7 @@ def main():
             target = torch.FloatTensor([TARGETED_CLASS]).cuda()
 
         adversarial_example = attacker(image, masks[image_index], target, True)
-        adversarial_prediction = model(adversarial_example.unsqueeze(0).cuda())
+        adversarial_prediction = model(adversarial_example.unsqueeze(0).cpu())
 
         adversarial_examples_list.append(adversarial_example.cpu())
         predictions_list.append({'original': original_prediction.cpu(),
