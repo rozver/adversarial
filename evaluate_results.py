@@ -2,6 +2,7 @@ import torch
 from matplotlib import pyplot as plt
 import os
 from torchvision.utils import save_image
+import argparse
 
 
 def plot_adversarial_examples(results):
@@ -34,24 +35,28 @@ def save_images_and_noises(results, results_location, dataset):
 
 
 def main():
-    dataset_location = 'dataset/imagenet-airplanes-images.pt'
-    dataset = torch.load(dataset_location)
-
-    files_folder_location = 'results/supercloud/pgd_new_experiments'
-    files = os.listdir(files_folder_location)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--location', type=str, default='resnet50')
+    parser.add_argument('--dataset', type=str, default='dataset/imagenet-airplanes-images.pt')
+    parser.add_argument('--save_images', default=False, action='store_true')
+    args = parser.parse_args()
 
     successful_attacks = 0
     all_attacks = 0
     setups_and_results = []
+    dataset = None
+
+    files = os.listdir(args.location)
+
+    if args.save_images:
+        dataset = torch.load(args.dataset)
 
     for file in files:
         if not file.endswith('.pt'):
             continue
 
-        results_location = os.path.join(files_folder_location, file)
+        results_location = os.path.join(args.location, file)
         results = torch.load(results_location)
-
-        save_images_and_noises(results, results_location, dataset)
 
         for predictions in results['predictions']:
             for original, adversarial in zip(predictions['original'], predictions['adversarial']):
@@ -67,9 +72,10 @@ def main():
                                   str(successful_attacks/all_attacks*100) +
                                   '\n')
 
-        save_images_and_noises(results, results_location, dataset)
+        if args.save_images:
+            save_images_and_noises(results, results_location, dataset)
 
-    with open(os.path.join(files_folder_location, 'setups_and_results.txt'), 'w') as file:
+    with open(os.path.join(args.location, 'setups_and_results.txt'), 'w') as file:
         for result in setups_and_results:
             file.write(str(result))
             file.write('\n')
