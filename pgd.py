@@ -42,7 +42,7 @@ def transfer_loss(model, criterion, x, label, targeted=False):
     if targeted:
         optimization_direction = -1
 
-    loss = torch.zeros([1]).cuda()
+    loss = torch.zeros([1]).cpu()
 
     for model_key in MODELS_DICT.keys():
         current_model = MODELS_DICT.get(model_key).cpu().eval()
@@ -150,7 +150,7 @@ def main():
     predictions_list = []
 
     for (image_index, image) in enumerate(images):
-        original_prediction = model(image.unsqueeze(0).cpu())
+        original_prediction = model(image.cpu().unsqueeze(0))
 
         if not args.targeted:
             target = original_prediction
@@ -158,7 +158,7 @@ def main():
             target = torch.FloatTensor([TARGETED_CLASS]).cuda()
 
         adversarial_example = attacker(image, masks[image_index], target, True)
-        adversarial_prediction = model(adversarial_example.unsqueeze(0).cpu())
+        adversarial_prediction = model(adversarial_example.cpu().unsqueeze(0))
 
         adversarial_examples_list.append(adversarial_example.cpu())
         predictions_list.append({'original': original_prediction.cpu(),
