@@ -123,18 +123,16 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', type=str, default='resnet50')
     parser.add_argument('--dataset', type=str, default='dataset/imagenet-airplanes-images.pt')
-    parser.add_argument('--masks', type=bool, default=False)
+    parser.add_argument('--masks', default=False, action='store_true')
     parser.add_argument('--eps', type=float, default=8)
     parser.add_argument('--norm', type=str, default='linf')
     parser.add_argument('--step_size', type=float, default=1)
     parser.add_argument('--num_iterations', type=int, default=50)
-    parser.add_argument('--targeted', type=bool, default=False)
-    parser.add_argument('--eot', type=bool, default=False)
-    parser.add_argument('--transfer', type=bool, default=False)
+    parser.add_argument('--targeted', default=False, action='store_true')
+    parser.add_argument('--eot', default=False, action='store_true')
+    parser.add_argument('--transfer', default=False, action='store_true')
     parser.add_argument('--save_file_name', type=str, default='results/pgd_new_experiments/pgd-' + time + '.pt')
     args = parser.parse_args()
-
-    print(args)
 
     args.eps, args.step_size = args.eps / 255.0, args.step_size / 255.0
 
