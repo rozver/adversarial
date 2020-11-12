@@ -18,25 +18,22 @@ def save_images_and_noises(results, results_location, dataset):
     if not os.path.exists(results_images_folder):
         os.makedirs(results_images_folder)
 
-    batch_size = len(results['adversarial_examples'][0])
+    for (image_index, adversarial_example) in enumerate(results['adversarial_examples']):
+        original_image = dataset[image_index]
+        noise = original_image - adversarial_example
 
-    for (batch_index, adversarial_batch) in enumerate(results['adversarial_examples']):
-        for (image_index, adversarial_example) in enumerate(adversarial_batch):
-            original_image = dataset[batch_index*batch_size+image_index]
-            noise = original_image - adversarial_example
-
-            images_save_path = results_images_folder + '/' + str(batch_index) + '_' + str(image_index)
-            save_image(original_image,
-                       images_save_path + '_original.png', normalize=True)
-            save_image(adversarial_example,
-                       images_save_path + '_adversarial.png', normalize=True)
-            save_image(noise,
-                       images_save_path + '_noise.png', normalize=True)
+        images_save_path = results_images_folder + '/' + str(image_index)
+        save_image(original_image,
+                   images_save_path + '_original.png', normalize=True)
+        save_image(adversarial_example,
+                   images_save_path + '_adversarial.png', normalize=True)
+        save_image(noise,
+                   images_save_path + '_noise.png', normalize=True)
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--location', type=str, default='resnet50')
+    parser.add_argument('--location', type=str, required=True)
     parser.add_argument('--dataset', type=str, default='dataset/imagenet-airplanes-images.pt')
     parser.add_argument('--save_images', default=False, action='store_true')
     args = parser.parse_args()
@@ -59,14 +56,13 @@ def main():
         results = torch.load(results_location)
 
         for predictions in results['predictions']:
-            for original, adversarial in zip(predictions['original'], predictions['adversarial']):
-                original_class = torch.argmax(original).item()
-                adversarial_class = torch.argmax(adversarial).item()
+            original_class = torch.argmax(predictions['original']).item()
+            adversarial_class = torch.argmax(predictions['adversarial']).item()
 
-                if original_class != adversarial_class:
-                    successful_attacks += 1
+            if original_class != adversarial_class:
+                successful_attacks += 1
 
-                all_attacks += 1
+            all_attacks += 1
 
         setups_and_results.append(str(results['args']) + '\nAttack success rate: ' +
                                   str(successful_attacks/all_attacks*100) +
