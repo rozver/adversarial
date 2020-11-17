@@ -15,7 +15,7 @@ class ImageNet(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         image_location = os.path.join(self.location, self.all_images[index])
-        image = Image.open(image_location)
+        image = Image.open(image_location).convert("RGB")
         tensor_image = self.transform(image)
         return tensor_image
 
@@ -41,8 +41,8 @@ class CocoCategory(torch.utils.data.Dataset):
         image_location = os.path.join(os.path.join(self.location, 'images'), self.images[index])
         mask_location = os.path.join(os.path.join(self.location, 'masks'), self.images[index])
 
-        image = Image.open(image_location)
-        mask = Image.open(mask_location)
+        image = Image.open(image_location).convert("RGB")
+        mask = Image.open(mask_location).convert("RGB")
 
         return [self.transform(image), self.transform(mask)]
 
