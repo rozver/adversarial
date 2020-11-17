@@ -6,10 +6,9 @@ import argparse
 
 
 def plot_adversarial_examples(results):
-    for batch in results['adversarial_examples']:
-        for image in batch:
-            plt.imshow(image.permute(1, 2, 0))
-            plt.show()
+    for image in results['adversarial_examples']:
+        plt.imshow(image.permute(1, 2, 0))
+        plt.show()
 
 
 def save_images_and_noises(results, results_location, dataset):
