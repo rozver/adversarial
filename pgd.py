@@ -127,7 +127,7 @@ def main():
     parser.add_argument('--eps', type=float, default=8)
     parser.add_argument('--norm', type=str, default='linf')
     parser.add_argument('--step_size', type=float, default=1)
-    parser.add_argument('--num_iterations', type=int, default=50)
+    parser.add_argument('--num_iterations', type=int, default=10)
     parser.add_argument('--targeted', default=False, action='store_true')
     parser.add_argument('--eot', default=False, action='store_true')
     parser.add_argument('--transfer', default=False, action='store_true')
@@ -141,15 +141,16 @@ def main():
     attacker = Attacker(model, args)
 
     if args.masks:
-        images, masks = torch.load(args.dataset)
+        images_and_masks = torch.load(args.dataset)
     else:
         images = torch.load(args.dataset)
-        masks = [torch.ones((1, images[0].size(1), images[0].size(2)))]*images.__len__()
+        masks = [torch.ones((3, images[0].size(1), images[0].size(2)))]*images.__len__()
+        images_and_masks = zip(images, masks)
 
     adversarial_examples_list = []
     predictions_list = []
 
-    for (image_index, image) in enumerate(images):
+    for image, mask in images_and_masks:
         original_prediction = model(image.cpu().unsqueeze(0))
 
         if not args.targeted:
@@ -157,7 +158,7 @@ def main():
         else:
             target = torch.FloatTensor([TARGETED_CLASS]).cuda()
 
-        adversarial_example = attacker(image, masks[image_index], target, True)
+        adversarial_example = attacker(image, mask[0], target, False)
         adversarial_prediction = model(adversarial_example.cpu().unsqueeze(0))
 
         adversarial_examples_list.append(adversarial_example.cpu())
