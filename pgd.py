@@ -49,7 +49,7 @@ def transfer_loss(model, criterion, x, label, targeted=False):
         prediction = current_model(x.cpu().unsqueeze(0))
         current_loss = criterion(prediction, label.cpu())
 
-        loss = torch.add(loss, optimization_direction*current_loss)
+        loss = torch.add(loss, optimization_direction*current_loss.cpu())
 
     loss = loss/len(MODELS_DICT.keys())
     return loss.cuda()
