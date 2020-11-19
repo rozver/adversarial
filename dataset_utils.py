@@ -30,7 +30,10 @@ class Normalizer(torch.nn.Module, ABC):
 
 class ImageNetPreprocessor:
     def __init__(self, location, model, rgb=True):
-        self.location = location
+        if os.path.exists(location):
+            self.location = location
+        else:
+            raise ValueError('Invalid dataset location!')
         self.rgb = rgb
         self.model = model
         self.dataset_images = None
@@ -89,7 +92,10 @@ class ImageNetPreprocessor:
 
 class CocoCategoryPreprocessor:
     def __init__(self, location, category):
-        self.location = location
+        if os.path.exists(location):
+            self.location = location
+        else:
+            raise ValueError('Invalid dataset location!')
         self.category = category
 
     def export_images_and_masks(self):
