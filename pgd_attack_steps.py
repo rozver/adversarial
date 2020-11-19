@@ -13,7 +13,7 @@ class AttackStep:
     def step(self, x, g):
         raise NotImplementedError
 
-    def random_perturb(self, x):
+    def random_perturb(self, x, mask):
         raise NotImplementedError
 
 
@@ -29,8 +29,8 @@ class LinfStep(AttackStep):
         new_x = x + step
         return new_x
 
-    def random_perturb(self, x):
-        perturbation = torch.rand_like(x)
+    def random_perturb(self, x, mask):
+        perturbation = mask*torch.rand_like(x)
         new_x = x + 2*(perturbation-0.5)*self.eps
         return new_x
 
@@ -48,7 +48,7 @@ class L2Step(AttackStep):
         new_x = x + grad_normed*self.eps
         return new_x
 
-    def random_perturb(self, x):
-        perturbation = torch.rand_like(x)
+    def random_perturb(self, x, mask):
+        perturbation = mask*torch.rand_like(x)
         new_x = self.project(self.orig_x+perturbation)
         return new_x

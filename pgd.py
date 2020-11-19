@@ -79,7 +79,7 @@ class Attacker:
         step = self.attack_step(image, self.args.eps, self.args.step_size)
 
         if random_start:
-            image = step.random_perturb(image)
+            image = step.random_perturb(image, mask)
 
         label = torch.argmax(target).view(1)
         if self.args.targeted:
