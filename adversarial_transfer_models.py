@@ -8,7 +8,6 @@ from multiple_predictions_serializer import save_dictionary_as_csv
 
 def get_models_dict():
     models = {
-        'resnet50': torchvision.models.resnet50(pretrained=True).eval(),
         'resnet18': torchvision.models.resnet18(pretrained=True).eval(),
         'resnet152': torchvision.models.resnet152(pretrained=True).eval(),
         'alexnet': torchvision.models.alexnet(pretrained=True).eval(),

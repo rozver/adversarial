@@ -49,6 +49,6 @@ if __name__ == '__main__':
             predicted_class = torch.argmax(predict(args.image, model, is_tensor=False)).item()
             print(predicted_class)
         else:
-            print('The entered file is not an image with a format .png, .jpg or .jpeg!')
+            raise ValueError('The entered file is not an image with a format .png, .jpg or .jpeg!')
     else:
-        print('Incorrect image path!')
+        raise ValueError('Incorrect image path!')
