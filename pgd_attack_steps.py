@@ -30,7 +30,7 @@ class LinfStep(AttackStep):
         return new_x
 
     def random_perturb(self, x, mask):
-        perturbation = mask*torch.rand_like(x)
+        perturbation = torch.rand_like(x)*mask
         new_x = x + 2*(perturbation-0.5)*self.eps
         return new_x
 
@@ -49,6 +49,6 @@ class L2Step(AttackStep):
         return new_x
 
     def random_perturb(self, x, mask):
-        perturbation = mask*torch.rand_like(x)
+        perturbation = torch.rand_like(x)*mask
         new_x = self.project(self.orig_x+perturbation)
         return new_x
