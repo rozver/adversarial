@@ -32,7 +32,7 @@ class Attacker:
 
         if args.transfer:
             self.loss = self.transfer_loss
-            self.surrogate_models = [MODELS_DICT[model_key].eval() for model_key in MODELS_DICT.keys()]
+            self.surrogate_models = [MODELS_DICT[model_key].cuda().eval() for model_key in MODELS_DICT.keys()]
         else:
             self.loss = self.normal_loss
 
@@ -103,7 +103,7 @@ class Attacker:
         if self.args.targeted:
             optimization_direction = -1
 
-        loss = torch.zeros([1])
+        loss = torch.zeros([1], device='cuda')
 
         for current_model in self.surrogate_models:
             prediction = current_model(x.unsqueeze(0))
@@ -134,33 +134,34 @@ def main():
 
     args.eps, args.step_size = args.eps / 255.0, args.step_size / 255.0
 
-    model = torchvision.models.resnet50(pretrained=True).eval()
+    model = torchvision.models.resnet50(pretrained=True).cuda().eval()
 
     attacker = Attacker(model, args)
-    target = torch.FloatTensor([TARGETED_CLASS])
+    target = torch.cuda.FloatTensor([TARGETED_CLASS])
 
     if args.masks:
         images_and_masks = torch.load(args.dataset)
     else:
         images = torch.load(args.dataset)
-        masks = [torch.ones((3, images[0].size(1), images[0].size(2)))]*images.__len__()
+        masks = [torch.ones((3, images[0].size(1), images[0].size(2)), device='cuda')]*images.__len__()
         images_and_masks = zip(images, masks)
 
     adversarial_examples_list = []
     predictions_list = []
 
     for image, mask in images_and_masks:
+        image = image.cuda()
         original_prediction = model(image.unsqueeze(0))
 
         if not args.targeted:
-            target = original_prediction
+            target = original_prediction.cuda()
 
         adversarial_example = attacker(image, mask[0], target, False)
         adversarial_prediction = model(adversarial_example.unsqueeze(0))
 
-        adversarial_examples_list.append(adversarial_example)
-        predictions_list.append({'original': original_prediction,
-                                 'adversarial': adversarial_prediction})
+        adversarial_examples_list.append(adversarial_example.cpu())
+        predictions_list.append({'original': original_prediction.cpu(),
+                                 'adversarial': adversarial_prediction.cpu()})
 
     torch.save({'adversarial_examples': adversarial_examples_list,
                 'predictions': predictions_list,
