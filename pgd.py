@@ -151,6 +151,8 @@ def main():
 
     for image, mask in images_and_masks:
         image = image.cuda()
+        mask = mask.cuda()
+
         original_prediction = model(image.unsqueeze(0))
 
         if not args.targeted:
