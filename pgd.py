@@ -32,7 +32,7 @@ class Attacker:
 
         if args.transfer:
             self.loss = self.transfer_loss
-            self.surrogate_models = [MODELS_DICT[model_key].cuda().eval() for model_key in MODELS_DICT.keys()]
+            self.surrogate_models = [MODELS_DICT[model_key].eval() for model_key in MODELS_DICT.keys()]
         else:
             self.loss = self.normal_loss
 
@@ -58,14 +58,14 @@ class Attacker:
 
         x = image.clone().detach().requires_grad_(True)
 
-        for _ in range(self.args.num_iterations):
+        for iteration in range(self.args.num_iterations):
             t = get_random_transformation()
             x = x.clone().detach().requires_grad_(True)
 
             if self.args.eot:
                 loss = self.loss(t(x.cuda()).cpu(), label)
             else:
-                loss = self.loss(x, label)
+                loss = self.loss(x.cpu(), label)
 
             loss.backward()
 
@@ -85,7 +85,7 @@ class Attacker:
             x = step.step(x, grads_with_mask)
             x = step.project(x)
 
-        return best_x
+        return best_x.cpu()
 
     def normal_loss(self, x, label):
         prediction = self.model(x.unsqueeze(0))
@@ -95,7 +95,8 @@ class Attacker:
         if self.args.targeted:
             optimization_direction = -1
 
-        return optimization_direction * self.criterion(prediction, label)
+        loss = optimization_direction * self.criterion(prediction, label)
+        return loss.cuda()
 
     def transfer_loss(self, x, label):
         optimization_direction = 1
@@ -103,7 +104,7 @@ class Attacker:
         if self.args.targeted:
             optimization_direction = -1
 
-        loss = torch.zeros([1], device='cuda')
+        loss = torch.zeros([1])
 
         for current_model in self.surrogate_models:
             prediction = current_model(x.unsqueeze(0))
@@ -112,7 +113,7 @@ class Attacker:
             loss = torch.add(loss, optimization_direction * current_loss)
 
         loss = loss / len(self.surrogate_models)
-        return loss
+        return loss.cuda()
 
 
 def main():
@@ -134,41 +135,54 @@ def main():
 
     args.eps, args.step_size = args.eps / 255.0, args.step_size / 255.0
 
-    model = torchvision.models.resnet50(pretrained=True).cuda().eval()
+    print('Running PGD experiment with the following arguments:')
+    print(str(args)+'\n')
+
+    model = torchvision.models.resnet50(pretrained=True).eval()
 
     attacker = Attacker(model, args)
-    target = torch.cuda.FloatTensor([TARGETED_CLASS])
+    target = torch.FloatTensor([TARGETED_CLASS])
 
+    print('Loading dataset...')
     if args.masks:
         images_and_masks = torch.load(args.dataset)
+        dataset_length = images_and_masks.__len__()
     else:
         images = torch.load(args.dataset)
-        masks = [torch.ones((3, images[0].size(1), images[0].size(2)), device='cuda')]*images.__len__()
+        masks = [torch.ones((3, images[0].size(1), images[0].size(2)))]*images.__len__()
         images_and_masks = zip(images, masks)
+        dataset_length = images.__len__()
+    print('Finished!\n')
 
     adversarial_examples_list = []
     predictions_list = []
 
-    for image, mask in images_and_masks:
-        image = image.cuda()
-        mask = mask.cuda()
-
+    print('Starting PGD...')
+    for index, (image, mask) in enumerate(images_and_masks):
+        print('Image: ' + str(index+1) + '/' + str(dataset_length))
         original_prediction = model(image.unsqueeze(0))
 
         if not args.targeted:
-            target = original_prediction.cuda()
+            target = original_prediction
 
-        adversarial_example = attacker(image, mask[0], target, False)
+        adversarial_example = attacker(image.cuda(), mask[0].cuda(), target, False)
         adversarial_prediction = model(adversarial_example.unsqueeze(0))
 
-        adversarial_examples_list.append(adversarial_example.cpu())
-        predictions_list.append({'original': original_prediction.cpu(),
-                                 'adversarial': adversarial_prediction.cpu()})
+        status = 'Success' if (torch.argmax(adversarial_prediction) != torch.argmax(target)) else 'Failure'
+        print('Attack status: ' + status + '\n')
 
+        adversarial_examples_list.append(adversarial_example)
+        predictions_list.append({'original': original_prediction,
+                                 'adversarial': adversarial_prediction})
+
+    print('Finished!')
+
+    print('Serializing results...')
     torch.save({'adversarial_examples': adversarial_examples_list,
                 'predictions': predictions_list,
                 'args': args},
                args.save_file_name)
+    print('Finished!\n')
 
 
 if __name__ == '__main__':
