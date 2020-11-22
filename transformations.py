@@ -71,7 +71,7 @@ class LightAdjustment(Transformation):
         super(LightAdjustment, self).__init__(transformation_type=self.transformation_type)
 
     def transform(self, x):
-        light = torch.FloatTensor().new_full(x.size(), self.parameter, device=torch.device('cuda'))
+        light = torch.cuda.FloatTensor().new_full(x.size(), self.parameter)
         x = torch.add(x, light)
         return x
 
@@ -100,11 +100,11 @@ class Translation(Transformation):
         x = x.permute(1, 2, 0)
 
         output_tensor = torch.ones(x.size())
-        translation = torch.round(torch.FloatTensor([parameter for parameter in self.parameter]).cuda())
+        translation = torch.round(torch.cuda.FloatTensor([parameter for parameter in self.parameter]))
 
         for row in range(x.size(0)):
             for column in range(x.size(1)):
-                point_vector = torch.FloatTensor([row, column]).cuda()
+                point_vector = torch.cuda.FloatTensor([row, column])
 
                 new_point_vector = torch.add(point_vector, translation)
 
@@ -125,8 +125,8 @@ class Rotation(Transformation):
     def transform(self, x):
         x = x.permute(1, 2, 0)
 
-        sin = torch.sin(torch.deg2rad(torch.FloatTensor([self.parameter])))
-        tan = torch.tan(torch.deg2rad(torch.FloatTensor([self.parameter/2])))
+        sin = torch.sin(torch.deg2rad(torch.cuda.FloatTensor([self.parameter])))
+        tan = torch.tan(torch.deg2rad(torch.cuda.FloatTensor([self.parameter/2])))
 
         if self.algorithm == 1:
             new_dim_rows = x.size(0)
@@ -139,17 +139,17 @@ class Rotation(Transformation):
 
         output_tensor = torch.zeros((new_dim_rows, new_dim_columns, 3)).cuda()
 
-        outer_matrix = torch.FloatTensor([[1, -tan],
-                                          [0, 1]]).cuda()
-        inner_matrix = torch.FloatTensor([[1, 0],
-                                          [sin, 1]]).cuda()
+        outer_matrix = torch.cuda.FloatTensor([[1, -tan],
+                                          [0, 1]])
+        inner_matrix = torch.cuda.FloatTensor([[1, 0],
+                                          [sin, 1]])
 
-        first_translation = torch.FloatTensor([int(-x.size(0) / 2), int(-x.size(1) / 2)]).cuda()
-        second_translation = torch.FloatTensor([int(new_dim_rows / 2), int(new_dim_columns / 2)]).cuda()
+        first_translation = torch.cuda.FloatTensor([int(-x.size(0) / 2), int(-x.size(1) / 2)])
+        second_translation = torch.cuda.FloatTensor([int(new_dim_rows / 2), int(new_dim_columns / 2)])
 
         for row in range(x.size(0)):
             for column in range(x.size(1)):
-                point_vector = torch.FloatTensor([row, column]).cuda()
+                point_vector = torch.cuda.FloatTensor([row, column])
 
                 point_vector = torch.add(point_vector, first_translation)
 
