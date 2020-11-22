@@ -25,50 +25,21 @@ def get_random_transformation():
     return t
 
 
-def normal_loss(model, criterion, x, label, targeted=False):
-    prediction = model(x.cpu().unsqueeze(0))
-
-    optimization_direction = 1
-
-    if targeted:
-        optimization_direction = -1
-
-    return optimization_direction * criterion(prediction, label)
-
-
-def transfer_loss(model, criterion, x, label, targeted=False):
-    optimization_direction = 1
-
-    if targeted:
-        optimization_direction = -1
-
-    loss = torch.zeros([1]).cpu()
-
-    for model_key in MODELS_DICT.keys():
-        current_model = MODELS_DICT.get(model_key).cpu().eval()
-        prediction = current_model(x.cpu().unsqueeze(0))
-        current_loss = criterion(prediction, label.cpu())
-
-        loss = torch.add(loss, optimization_direction*current_loss.cpu())
-
-    loss = loss/len(MODELS_DICT.keys())
-    return loss.cuda()
-
-
 class Attacker:
-    def __init__(self, model, args, loss=normal_loss, attack_step=LinfStep, masks_batch=None):
+    def __init__(self, model, args, attack_step=LinfStep, masks_batch=None):
         self.model = model
         self.args = args
 
         if args.transfer:
-            loss = transfer_loss
+            self.loss = self.transfer_loss
+            self.surrogate_models = [MODELS_DICT[model_key].eval() for model_key in MODELS_DICT.keys()]
+        else:
+            self.loss = self.normal_loss
 
         if args.norm == 'l2':
             attack_step = L2Step
 
         self.masks_batch = masks_batch
-
-        self.loss = loss
         self.criterion = torch.nn.CrossEntropyLoss(reduction='none')
         self.attack_step = attack_step
 
@@ -92,9 +63,9 @@ class Attacker:
             x = x.clone().detach().requires_grad_(True)
 
             if self.args.eot:
-                loss = self.loss(self.model, self.criterion, t(x.cuda()).cuda(), label, self.args.targeted)
+                loss = self.loss(t(x.cuda()).cpu(), label)
             else:
-                loss = self.loss(self.model, self.criterion, x.cuda(), label, self.args.targeted)
+                loss = self.loss(x, label)
 
             loss.backward()
 
@@ -116,6 +87,33 @@ class Attacker:
 
         return best_x
 
+    def normal_loss(self, x, label):
+        prediction = self.model(x.unsqueeze(0))
+
+        optimization_direction = 1
+
+        if self.args.targeted:
+            optimization_direction = -1
+
+        return optimization_direction * self.criterion(prediction, label)
+
+    def transfer_loss(self, x, label):
+        optimization_direction = 1
+
+        if self.args.targeted:
+            optimization_direction = -1
+
+        loss = torch.zeros([1])
+
+        for current_model in self.surrogate_models:
+            prediction = current_model(x.unsqueeze(0))
+            current_loss = self.criterion(prediction, label)
+
+            loss = torch.add(loss, optimization_direction * current_loss)
+
+        loss = loss / len(self.surrogate_models)
+        return loss
+
 
 def main():
     time = get_current_time()
@@ -136,9 +134,10 @@ def main():
 
     args.eps, args.step_size = args.eps / 255.0, args.step_size / 255.0
 
-    model = torchvision.models.resnet50(pretrained=True).cpu().eval()
+    model = torchvision.models.resnet50(pretrained=True).eval()
 
     attacker = Attacker(model, args)
+    target = torch.FloatTensor([TARGETED_CLASS])
 
     if args.masks:
         images_and_masks = torch.load(args.dataset)
@@ -151,19 +150,17 @@ def main():
     predictions_list = []
 
     for image, mask in images_and_masks:
-        original_prediction = model(image.cpu().unsqueeze(0))
+        original_prediction = model(image.unsqueeze(0))
 
         if not args.targeted:
             target = original_prediction
-        else:
-            target = torch.FloatTensor([TARGETED_CLASS]).cuda()
 
         adversarial_example = attacker(image, mask[0], target, False)
-        adversarial_prediction = model(adversarial_example.cpu().unsqueeze(0))
+        adversarial_prediction = model(adversarial_example.unsqueeze(0))
 
-        adversarial_examples_list.append(adversarial_example.cpu())
-        predictions_list.append({'original': original_prediction.cpu(),
-                                 'adversarial': adversarial_prediction.cpu()})
+        adversarial_examples_list.append(adversarial_example)
+        predictions_list.append({'original': original_prediction,
+                                 'adversarial': adversarial_prediction})
 
     torch.save({'adversarial_examples': adversarial_examples_list,
                 'predictions': predictions_list,

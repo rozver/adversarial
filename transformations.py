@@ -71,7 +71,7 @@ class LightAdjustment(Transformation):
         super(LightAdjustment, self).__init__(transformation_type=self.transformation_type)
 
     def transform(self, x):
-        light = torch.FloatTensor().new_full(x.size(), self.parameter).cuda()
+        light = torch.FloatTensor().new_full(x.size(), self.parameter, device=torch.device('cuda'))
         x = torch.add(x, light)
         return x
 
@@ -82,7 +82,7 @@ class Noise(Transformation):
         super(Noise, self).__init__(transformation_type=self.transformation_type)
 
     def transform(self, x):
-        noise = torch.normal(mean=0.0, std=self.parameter, size=x.size()).cuda()
+        noise = torch.normal(mean=0.0, std=self.parameter, size=x.size(), device=torch.device('cuda'))
         x = torch.add(x, noise).float()
         return x
 
