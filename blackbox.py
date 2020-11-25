@@ -31,7 +31,7 @@ def simba_pixels(model, x, y, args, g):
     q = torch.zeros(x.size()).cuda()
 
     p = get_probabilities(model, x, y)
-    perm = torch.randperm(x.size(0) * x.size(1) * x.size(1))
+    perm = torch.randperm(x.size(0) * x.size(1) * x.size(2))
 
     for iteration, pixel in enumerate(perm):
         if iteration == args.num_iterations:
