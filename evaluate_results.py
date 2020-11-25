@@ -55,6 +55,9 @@ def main():
         results = torch.load(results_location)
         successful_attacks = 0
 
+        if 'blackbox' in results['args'].save_file_name:
+            results['args'].masks = False
+
         for predictions in results['predictions']:
             original_class = torch.argmax(predictions['original']).item()
             adversarial_class = torch.argmax(predictions['adversarial']).item()
