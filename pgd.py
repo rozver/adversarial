@@ -147,12 +147,12 @@ def main():
 
     print('Loading dataset...')
     if args.masks:
-        images_and_masks = torch.load(args.dataset)
-        dataset_length = images_and_masks.__len__()
+        dataset = torch.load(args.dataset)
+        dataset_length = dataset.__len__()
     else:
         images = torch.load(args.dataset)
-        masks = [torch.ones((3, images[0].size(1), images[0].size(2)))]*images.__len__()
-        images_and_masks = zip(images, masks)
+        masks = [torch.ones(images[0].size())]*images.__len__()
+        dataset = zip(images, masks)
         dataset_length = images.__len__()
     print('Finished!\n')
 
@@ -160,7 +160,7 @@ def main():
     predictions_list = []
 
     print('Starting PGD...')
-    for index, (image, mask) in enumerate(images_and_masks):
+    for index, (image, mask) in enumerate(dataset):
         print('Image: ' + str(index+1) + '/' + str(dataset_length))
         original_prediction = model(image.unsqueeze(0))
 
