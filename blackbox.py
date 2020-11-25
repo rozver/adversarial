@@ -38,21 +38,23 @@ def simba_pixels(model, x, y, args, g):
             break
 
         c, w, h = get_tensor_pixel_indices(pixel)
-        q[c, w, h] = g[c, w, h]
 
-        p_prim_left = get_probabilities(model, (x + delta + args.eps * q).clamp(0, 1), y)
+        if g[c, w, h] != 0:
+            q[c, w, h] = g[c, w, h]
 
-        if p_prim_left < p:
-            delta = delta + args.eps * q
-            p = p_prim_left
+            p_prim_left = get_probabilities(model, (x + delta + args.eps * q).clamp(0, 1), y)
 
-        else:
-            p_prim_right = get_probabilities(model, (x + delta - args.eps * q).clamp(0, 1), y)
-            if p_prim_right < p:
+            if p_prim_left < p:
                 delta = delta + args.eps * q
                 p = p_prim_left
 
-        q[c, w, h] = 0
+            else:
+                p_prim_right = get_probabilities(model, (x + delta - args.eps * q).clamp(0, 1), y)
+                if p_prim_right < p:
+                    delta = delta + args.eps * q
+                    p = p_prim_left
+
+            q[c, w, h] = 0
 
     return delta
 
@@ -84,6 +86,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', type=str, choices=MODELS_DICT.keys(), default='resnet50')
     parser.add_argument('--dataset', type=str, default='dataset/imagenet-airplanes-images.pt')
+    parser.add_argument('--masks', default=False, action='store_true')
     parser.add_argument('--attack_type', type=str, choices=['nes', 'simba'], default='simba')
     parser.add_argument('--eps', type=float, default=10)
     parser.add_argument('--num_iterations', type=int, default=1)
@@ -91,12 +94,18 @@ def main():
     args = parser.parse_args()
 
     model = MODELS_DICT.get(args.model).cuda()
-    dataset = torch.load(args.dataset)
+
+    if args.masks:
+        dataset = torch.load(args.dataset)
+    else:
+        images = torch.load(args.dataset)
+        masks = [torch.ones(images[0].size())]*images.__len__()
+        dataset = zip(images, masks)
 
     adversarial_examples_list = []
     predictions_list = []
 
-    for image in dataset:
+    for image, mask in dataset:
         with torch.no_grad():
             original_prediction = model(image.cuda().unsqueeze(0))
         label = torch.argmax(original_prediction)
@@ -105,7 +114,7 @@ def main():
             grad = nes_gradient(model, image.cuda(), label, args.eps, args.num_iterations)
             adversarial_example = fgsm_grad(image.cuda(), grad, args.eps)
         else:
-            delta = simba_pixels(model, image.cuda(), label.cuda(), args, torch.ones(image.size()).cuda())
+            delta = simba_pixels(model, image.cuda(), label.cuda(), args, mask.cuda())
             adversarial_example = (image.cuda() + delta).clamp(0, 1)
 
         with torch.no_grad():
