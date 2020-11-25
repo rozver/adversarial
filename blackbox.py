@@ -38,7 +38,11 @@ def simba_pixels(model, x, y, args, g):
             break
 
         c, w, h = get_tensor_pixel_indices(pixel)
-        print(g.shape)
+
+        print('Image shape: ' + str(x.shape))
+        print('Mask shape: ' + str(g.shape))
+        print('Channels: ' + str(c) + '; Width: ' + str(w) + '; Height: ' + str(h))
+
         if g[c, w, h] != 0:
             q[c, w, h] = g[c, w, h]
 
