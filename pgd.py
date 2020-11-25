@@ -5,7 +5,6 @@ from adversarial_transfer_models import get_models_dict
 from transformations import get_transformation
 import argparse
 import datetime
-import torchvision
 
 TARGETED_CLASS = 934
 MODELS_DICT = get_models_dict()
@@ -32,7 +31,10 @@ class Attacker:
 
         if args.transfer:
             self.loss = self.transfer_loss
-            self.surrogate_models = [MODELS_DICT[model_key].eval() for model_key in MODELS_DICT.keys()]
+            self.surrogate_models = [MODELS_DICT[model_key].eval()
+                                     for model_key in MODELS_DICT.keys()
+                                     if model_key != args.model
+                                     ]
         else:
             self.loss = self.normal_loss
 
@@ -120,11 +122,11 @@ def main():
     time = get_current_time()
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model', type=str, default='resnet50')
+    parser.add_argument('--model', type=str, choices=MODELS_DICT.keys(), default='resnet50')
     parser.add_argument('--dataset', type=str, default='dataset/imagenet-airplanes-images.pt')
     parser.add_argument('--masks', default=False, action='store_true')
     parser.add_argument('--eps', type=float, default=8)
-    parser.add_argument('--norm', type=str, default='linf')
+    parser.add_argument('--norm', type=str, choices=['l2', 'linf'], default='linf')
     parser.add_argument('--step_size', type=float, default=1)
     parser.add_argument('--num_iterations', type=int, default=10)
     parser.add_argument('--targeted', default=False, action='store_true')
@@ -138,7 +140,7 @@ def main():
     print('Running PGD experiment with the following arguments:')
     print(str(args)+'\n')
 
-    model = torchvision.models.resnet50(pretrained=True).eval()
+    model = MODELS_DICT.get(args.model)
 
     attacker = Attacker(model, args)
     target = torch.FloatTensor([TARGETED_CLASS])
