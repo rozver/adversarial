@@ -16,12 +16,12 @@ def get_probabilities(model, x, y):
     return prediction_softmax_y
 
 
-def get_tensor_pixel_indices(pixel):
-    h = pixel % 224
-    pixel = pixel // 224
-    w = pixel % 224
-    pixel = pixel // 224
-    c = pixel % 3
+def get_tensor_pixel_indices(pixel, size):
+    h = pixel % size[2]
+    pixel = pixel // size[2]
+    w = pixel % size[1]
+    pixel = pixel // size[2]
+    c = pixel % size[0]
 
     return c, w, h
 
@@ -37,11 +37,7 @@ def simba_pixels(model, x, y, args, g):
         if iteration == args.num_iterations:
             break
 
-        c, w, h = get_tensor_pixel_indices(pixel)
-
-        print('Image shape: ' + str(x.shape))
-        print('Mask shape: ' + str(g.shape))
-        print('Channels: ' + str(c) + '; Width: ' + str(w) + '; Height: ' + str(h))
+        c, w, h = get_tensor_pixel_indices(pixel, x.size())
 
         if g[c, w, h] != 0:
             q[c, w, h] = g[c, w, h]
