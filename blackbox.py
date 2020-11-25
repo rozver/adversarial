@@ -111,9 +111,9 @@ def main():
         with torch.no_grad():
             adversarial_prediction = model(adversarial_example.unsqueeze(0))
 
-        adversarial_examples_list.append(adversarial_example)
-        predictions_list.append({'original': original_prediction,
-                                 'adversarial': adversarial_prediction})
+        adversarial_examples_list.append(adversarial_example.cpu())
+        predictions_list.append({'original': original_prediction.cpu(),
+                                 'adversarial': adversarial_prediction.cpu()})
 
     torch.save({'adversarial_examples': adversarial_examples_list,
                 'predictions': predictions_list,
