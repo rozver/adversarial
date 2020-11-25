@@ -9,11 +9,12 @@ from multiple_predictions_serializer import save_dictionary_as_csv
 def get_models_dict():
     models = {
         'resnet18': torchvision.models.resnet18(pretrained=True).eval(),
+        'resnet50': torchvision.models.resnet50(pretrained=True).eval(),
         'resnet152': torchvision.models.resnet152(pretrained=True).eval(),
         'alexnet': torchvision.models.alexnet(pretrained=True).eval(),
         'vgg16': torchvision.models.vgg16(pretrained=True).eval(),
         'vgg19': torchvision.models.vgg19(pretrained=True).eval(),
-        'inception': torchvision.models.inception_v3(pretrained=True).eval(),
+        'inception_v3': torchvision.models.inception_v3(pretrained=True).eval(),
     }
 
     return models
