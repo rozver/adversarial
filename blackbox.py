@@ -8,7 +8,8 @@ MODELS_DICT = get_models_dict()
 
 
 def get_probabilities(model, x, y):
-    prediction = model(x.unsqueeze(0).cuda())
+    with torch.no_grad:
+        prediction = model(x.unsqueeze(0).cuda())
     prediction_softmax = softmax(prediction, 1)
     prediction_softmax_y = prediction_softmax[0][y]
 
@@ -83,41 +84,39 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', type=str, choices=MODELS_DICT.keys(), default='resnet50')
     parser.add_argument('--dataset', type=str, default='dataset/imagenet-airplanes-images.pt')
+    parser.add_argument('--attack_type', type=str, choices=['nes', 'simba'], default='simba')
     parser.add_argument('--eps', type=float, default=10)
     parser.add_argument('--num_iterations', type=int, default=1)
-    parser.add_argument('--save_file_name', type=str, default='results/blackbox/simba-nes-' + time + '.pt')
+    parser.add_argument('--save_file_name', type=str, default='results/blackbox/' + time + '.pt')
     args = parser.parse_args()
 
-    model = MODELS_DICT.get(args.model).cuda().eval()
+    model = MODELS_DICT.get(args.model).cuda()
     dataset = torch.load(args.dataset)
 
-    adversarial_examples_nes_list = []
-    adversarial_examples_simba_list = []
-    predictions_nes = []
-    predictions_simba = []
+    adversarial_examples_list = []
+    predictions_list = []
 
     for image in dataset:
-        original_prediction = model(image.cuda().unsqueeze(0))
+        with torch.no_grad:
+            original_prediction = model(image.cuda().unsqueeze(0))
         label = torch.argmax(original_prediction)
 
-        grad = nes_gradient(model, image.cuda(), label, args.eps, args.num_iterations)
+        if args.attack_type == 'nes':
+            grad = nes_gradient(model, image.cuda(), label, args.eps, args.num_iterations)
+            adversarial_example = fgsm_grad(image.cuda(), grad, args.eps)
+        else:
+            delta = simba_pixels(model, image.cuda(), label.cuda(), args, torch.ones(image.size()).cuda())
+            adversarial_example = (image.cuda() + delta).clamp(0, 1)
 
-        adversarial_example_nes = fgsm_grad(image.cuda(), grad, args.eps)
-        adversarial_predictions_nes = torch.argmax(model(adversarial_example_nes.unsqueeze(0)))
+        with torch.no_grad:
+            adversarial_prediction = model(adversarial_example.unsqueeze(0))
 
-        adversarial_examples_nes_list.append(adversarial_example_nes.cpu())
-        predictions_nes.append({'original': original_prediction, 'adversarial': adversarial_predictions_nes})
+        adversarial_examples_list.append(adversarial_example)
+        predictions_list.append({'original': original_prediction,
+                                 'adversarial': adversarial_prediction})
 
-        delta = simba_pixels(model, image.cuda(), label.cuda(), args, torch.ones(image.size()).cuda())
-
-        adversarial_example_simba = (image.cuda() + delta).clamp(0, 1)
-        adversarial_predictions_simba = model(adversarial_example_simba.unsqueeze(0))
-
-        adversarial_examples_simba_list.append(adversarial_example_simba.cpu())
-        predictions_simba.append({'original': original_prediction, 'adversarial': adversarial_predictions_simba})
-
-    torch.save({'nes': zip(adversarial_examples_nes_list, predictions_nes),
-                'simba': zip(adversarial_examples_simba_list, predictions_simba),
+    torch.save({'adversarial_examples': adversarial_examples_list,
+                'predictions': predictions_list,
                 'args': args},
                args.save_file_name)
 
