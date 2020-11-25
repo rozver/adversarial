@@ -9,7 +9,7 @@ MODELS_DICT = get_models_dict()
 
 def get_probabilities(model, x, y):
     with torch.no_grad():
-        prediction = model(x.unsqueeze(0).cuda())
+        prediction = model(x.unsqueeze(0))
     prediction_softmax = softmax(prediction, 1)
     prediction_softmax_y = prediction_softmax[0][y]
 
