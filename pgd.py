@@ -74,7 +74,7 @@ class Attacker:
             grads = x.grad.detach().clone()
             x.grad.zero_()
 
-            grads_with_mask = grads*mask
+            grads_foreground = grads*mask
 
             if best_loss is not None:
                 if best_loss < loss:
@@ -84,7 +84,7 @@ class Attacker:
                 best_loss = loss.clone().detach()
                 best_x = x.clone().detach()
 
-            x = step.step(x, grads_with_mask)
+            x = step.step(x, grads_foreground)
             x = step.project(x)
 
         return best_x.cpu()
