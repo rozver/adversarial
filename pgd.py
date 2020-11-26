@@ -6,7 +6,7 @@ from transformations import get_transformation
 import argparse
 import datetime
 
-TARGETED_CLASS = 934
+TARGET_CLASS = 934
 MODELS_DICT = get_models_dict()
 
 
@@ -152,7 +152,7 @@ def main():
     model = MODELS_DICT.get(args.model)
 
     attacker = Attacker(model, args)
-    target = torch.FloatTensor([TARGETED_CLASS])
+    target = torch.FloatTensor([TARGET_CLASS])
 
     print('Loading dataset...')
     if args.masks:
