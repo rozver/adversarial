@@ -59,9 +59,14 @@ class Attacker:
             label[0] = target
 
         x = image.clone().detach().requires_grad_(True)
+        iterations_without_updates = 0
 
         for iteration in range(self.args.num_iterations):
             t = get_random_transformation()
+
+            if iterations_without_updates == 10:
+                x = step.random_perturb(x, mask)
+
             x = x.clone().detach().requires_grad_(True)
 
             if self.args.eot:
@@ -80,9 +85,13 @@ class Attacker:
                 if best_loss < loss:
                     best_loss = loss
                     best_x = x.clone().detach()
+                    iterations_without_updates = -1
             else:
                 best_loss = loss.clone().detach()
                 best_x = x.clone().detach()
+                iterations_without_updates = -1
+
+            iterations_without_updates += 1
 
             x = step.step(x, grads_foreground)
             x = step.project(x)
