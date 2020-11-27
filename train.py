@@ -41,7 +41,7 @@ def main():
             loss.backward()
             opt.step()
 
-    torch.save(model.state_dict(), args.model + '_robust.pt')
+    torch.save(model.state_dict(), 'models/' + args.model + '_robust.pt')
 
 
 if __name__ == '__main__':
