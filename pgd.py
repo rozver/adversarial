@@ -59,6 +59,7 @@ class Attacker:
             label[0] = target
 
         x = image.clone().detach().requires_grad_(True)
+        self.model = self.model.cpu()
         iterations_without_updates = 0
 
         for iteration in range(self.args.num_iterations):
