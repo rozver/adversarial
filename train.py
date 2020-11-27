@@ -12,6 +12,7 @@ def main():
     parser.add_argument('--norm', type=str, choices=['l2', 'linf'], default='linf')
     parser.add_argument('--step_size', type=float, default=1)
     parser.add_argument('--num_iterations', type=int, default=10)
+    parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--targeted', default=False, action='store_true')
     parser.add_argument('--eot', default=False, action='store_true')
     parser.add_argument('--transfer', default=False, action='store_true')
@@ -28,20 +29,20 @@ def main():
     opt = torch.optim.SGD(model.parameters(), lr=1e-1)
 
     attacker = Attacker(model, args)
+    for epoch in range(args.epochs):
+        for images_batch, labels_batch in zip(images_loader, labels_loader):
+            for image, label in zip(images_batch, labels_batch):
+                delta = attacker(image, torch.ones(image.size()), label) - image
+                adversarial_prediction = model.cuda()((image+delta).cuda().unsqueeze(0))
 
-    for images_batch, labels_batch in zip(images_loader, labels_loader):
-        for image, label in zip(images_batch, labels_batch):
-            delta = attacker(image, torch.ones(image.size()), label) - image
-            adversarial_prediction = model.cuda()((image+delta).cuda().unsqueeze(0))
+                loss = criterion(adversarial_prediction, torch.LongTensor([label]).cuda())
+                print(loss)
 
-            loss = criterion(adversarial_prediction, torch.LongTensor([label]).cuda())
-            print(loss)
+                opt.zero_grad()
+                loss.backward()
+                opt.step()
 
-            opt.zero_grad()
-            loss.backward()
-            opt.step()
-
-    torch.save(model.state_dict(), 'models/' + args.model + '_robust.pt')
+    torch.save(model.state_dict(), 'models/' + args.model + '_robust_2.pt')
 
 
 if __name__ == '__main__':
