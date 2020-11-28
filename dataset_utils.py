@@ -97,6 +97,7 @@ class CocoCategoryPreprocessor:
         else:
             raise ValueError('Invalid dataset location!')
         self.category = category
+        self.dataset = None
 
     def export_images_and_masks(self):
         categories_file = open(os.path.join(self.location, 'categories_list.txt'))
@@ -137,14 +138,29 @@ class CocoCategoryPreprocessor:
         else:
             raise ValueError('Incorrect category type specified!')
 
-    def serialize(self):
+    def set_dataset(self):
         category_location = os.path.join(self.location, self.category)
         if os.path.exists(category_location):
             dataset = datasets.CocoCategory(self.location, self.category, transform=transforms.ToTensor())
-            torch.save(dataset, category_location+'.pt')
+            self.dataset = dataset
         else:
-            raise ValueError('Dataset images and masks not exported!')
+            raise ValueError('Dataset images and masks for the chosen category are not exported!')
+
+    def get_dataset(self):
+        return self.dataset
+
+    def serialize(self):
+        category_location = os.path.join(self.location, self.category)
+        if self.dataset is not None:
+            torch.save(self.dataset, category_location+'.pt')
+        else:
+            raise ValueError('Dataset not set!')
 
     def run(self):
         self.export_images_and_masks()
         self.serialize()
+
+
+coco = CocoCategoryPreprocessor('dataset/coco', 'airplane')
+coco.set_dataset()
+coco.serialize()
