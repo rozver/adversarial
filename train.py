@@ -13,7 +13,7 @@ class Trainer:
         self.adversarial = training_args_dict['adversarial']
         self.attacker = None
         self.criterion = criterion
-        self.optimizer = optimizer(self.model.parameters(), lr=1e-1)
+        self.optimizer = optimizer(self.model.parameters(), lr=training_args_dict['learning_rate'])
         self.losses = []
 
     def fit(self, images, labels):
@@ -84,6 +84,7 @@ def main():
     parser.add_argument('--model', type=str, choices=MODELS_DICT.keys(), default='resnet50')
     parser.add_argument('--dataset', type=str, default='dataset/imagenet-airplanes-images.pt')
     parser.add_argument('--epochs', type=int, default=10)
+    parser.add_argument('--learning_rate', type=float, default=1e-1)
     parser.add_argument('--adversarial', default=False, action='store_true')
     parser.add_argument('--save_file_name', type=str, default='models/resnet50_robust.pt')
     args_dict = vars(parser.parse_args())
