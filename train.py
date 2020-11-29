@@ -14,11 +14,18 @@ class Trainer:
         self.attacker = None
         self.criterion = criterion
         self.optimizer = optimizer(self.model.parameters(), lr=1e-1)
+        self.losses = []
 
-    def fit(self, data_loader, epochs):
+    def fit(self, images, labels):
         self.model = self.model.cuda().train()
-        for epoch in range(epochs):
-            for images_batch, labels_batch in data_loader:
+
+        for epoch in range(self.training_args_dict['epochs']):
+            images_loader = torch.utils.data.DataLoader(images, batch_size=10, num_workers=4)
+            labels_loader = torch.utils.data.DataLoader(labels, batch_size=10, num_workers=4)
+
+            current_loss = 0.0
+
+            for images_batch, labels_batch in zip(images_loader, labels_loader):
                 if self.adversarial:
                     images_batch = self.get_adversarial_examples(images_batch, labels_batch)
 
@@ -26,10 +33,18 @@ class Trainer:
 
                 predictions = self.model.cuda()(images_batch.cuda())
                 loss = self.criterion(predictions, labels_batch.cuda())
-                print(loss)
 
                 loss.backward()
                 self.optimizer.step()
+
+                current_loss += loss.item() * images_batch.size(0)
+
+            epoch_loss = current_loss / len(images)
+            print('Epoch: {}/{} - Loss: {}'.format(str(epoch+1),
+                                                   str(self.training_args_dict['epochs']),
+                                                   str(epoch_loss)))
+
+            self.losses.append(epoch)
 
     def switch_to_normal(self):
         self.adversarial = False
@@ -39,6 +54,9 @@ class Trainer:
 
     def get_model(self):
         return self.model
+
+    def get_losses(self):
+        return self.losses
 
     def get_adversarial_examples(self, images_batch, labels_batch):
         mask = None
@@ -67,6 +85,7 @@ def main():
     parser.add_argument('--dataset', type=str, default='dataset/imagenet-airplanes-images.pt')
     parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--adversarial', default=False, action='store_true')
+    parser.add_argument('--save_file_name', type=str, default='models/resnet50_robust.pt')
     args_dict = vars(parser.parse_args())
 
     pgd_args_dict = {
@@ -85,17 +104,15 @@ def main():
     images = torch.load('dataset/imagenet-airplanes-images.pt')
     labels = torch.load('dataset/imagenet-airplanes-labels.pt')
 
-    images_loader = torch.utils.data.DataLoader(images, batch_size=10, num_workers=4)
-    labels_loader = torch.utils.data.DataLoader(labels, batch_size=10, num_workers=4)
-    data_loader = zip(images_loader, labels_loader)
-
     model = MODELS_DICT.get(args_dict['model']).cuda().train()
 
     trainer = Trainer(model, args_dict, pgd_args_dict)
-    trainer.switch_to_adversarial()
-    trainer.fit(data_loader, args_dict['epochs'])
+    trainer.fit(images, labels)
 
-    torch.save({'state_dict': model.state_dict(), 'training_args': args_dict, 'pgd_args': pgd_args_dict},
+    torch.save({'state_dict': model.state_dict(),
+                'training_args': args_dict,
+                'pgd_args': pgd_args_dict,
+                'losses': trainer.get_losses()},
                'models/' + args_dict['model'] + '_robust.pt')
 
 
