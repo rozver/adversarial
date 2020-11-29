@@ -25,20 +25,20 @@ def get_random_transformation():
 
 
 class Attacker:
-    def __init__(self, model, args, attack_step=LinfStep, masks_batch=None):
+    def __init__(self, model, args_dict, attack_step=LinfStep, masks_batch=None):
         self.model = model
-        self.args = args
+        self.args_dict = args_dict
 
-        if args.transfer:
+        if args_dict['transfer']:
             self.loss = self.transfer_loss
             self.surrogate_models = [MODELS_DICT[model_key].eval()
                                      for model_key in MODELS_DICT.keys()
-                                     if model_key != args.model
+                                     if model_key != args_dict['model']
                                      ]
         else:
             self.loss = self.normal_loss
 
-        if args.norm == 'l2':
+        if args_dict['norm'] == 'l2':
             attack_step = L2Step
 
         self.masks_batch = masks_batch
@@ -49,28 +49,28 @@ class Attacker:
         best_loss = None
         best_x = None
 
-        step = self.attack_step(image, self.args.eps, self.args.step_size)
+        step = self.attack_step(image, self.args_dict['eps'], self.args_dict['step_size'])
 
         if random_start:
             image = step.random_perturb(image, mask)
 
         label = torch.argmax(target).view(1)
-        if self.args.targeted:
+        if self.args_dict['targeted']:
             label[0] = target
 
         x = image.clone().detach().requires_grad_(True)
         self.model = self.model.cpu()
         iterations_without_updates = 0
 
-        for iteration in range(self.args.num_iterations):
+        for iteration in range(self.args_dict['num_iterations']):
             t = get_random_transformation()
 
             if iterations_without_updates == 10:
-                x = step.random_perturb(x, mask)
+                x = step.random_perturb(image, mask)
 
             x = x.clone().detach().requires_grad_(True)
 
-            if self.args.eot:
+            if self.args_dict['eot']:
                 loss = self.loss(t(x.cuda()).cpu(), label)
             else:
                 loss = self.loss(x.cpu(), label)
@@ -104,7 +104,7 @@ class Attacker:
 
         optimization_direction = 1
 
-        if self.args.targeted:
+        if self.args_dict['targeted']:
             optimization_direction = -1
 
         loss = optimization_direction * self.criterion(prediction, label)
@@ -113,7 +113,7 @@ class Attacker:
     def transfer_loss(self, x, label):
         optimization_direction = 1
 
-        if self.args.targeted:
+        if self.args_dict['targeted']:
             optimization_direction = -1
 
         loss = torch.zeros([1])
@@ -143,24 +143,26 @@ def main():
     parser.add_argument('--eot', default=False, action='store_true')
     parser.add_argument('--transfer', default=False, action='store_true')
     parser.add_argument('--save_file_name', type=str, default='results/pgd_new_experiments/pgd-' + time + '.pt')
-    args = parser.parse_args()
+    args_ns = parser.parse_args()
 
-    args.eps, args.step_size = args.eps / 255.0, args.step_size / 255.0
+    args_dict = vars(args_ns)
+
+    args_dict['eps'], args_dict['step_size'] = args_dict['eps'] / 255.0, args_dict['step_size'] / 255.0
 
     print('Running PGD experiment with the following arguments:')
-    print(str(args)+'\n')
+    print(str(args_dict)+'\n')
 
-    model = MODELS_DICT.get(args.model)
+    model = MODELS_DICT.get(args_dict['model'])
 
-    attacker = Attacker(model, args)
+    attacker = Attacker(model, args_dict)
     target = torch.FloatTensor([TARGET_CLASS])
 
     print('Loading dataset...')
-    if args.masks:
-        dataset = torch.load(args.dataset)
+    if args_dict['masks']:
+        dataset = torch.load(args_dict['dataset'])
         dataset_length = dataset.__len__()
     else:
-        images = torch.load(args.dataset)
+        images = torch.load(args_dict['dataset'])
         masks = [torch.ones(images[0].size())]*images.__len__()
         dataset = zip(images, masks)
         dataset_length = images.__len__()
@@ -174,7 +176,7 @@ def main():
         print('Image: ' + str(index+1) + '/' + str(dataset_length))
         original_prediction = model(image.unsqueeze(0))
 
-        if not args.targeted:
+        if not args_dict['targeted']:
             target = original_prediction
 
         adversarial_example = attacker(image.cuda(), mask[0].cuda(), target, False)
@@ -192,8 +194,8 @@ def main():
     print('Serializing results...')
     torch.save({'adversarial_examples': adversarial_examples_list,
                 'predictions': predictions_list,
-                'args': args},
-               args.save_file_name)
+                'args_dict': args_dict},
+               args_dict['save_file_name'])
     print('Finished!\n')
 
 
