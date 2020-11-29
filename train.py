@@ -113,7 +113,7 @@ def main():
                 'training_args': args_dict,
                 'pgd_args': pgd_args_dict,
                 'losses': trainer.get_losses()},
-               'models/' + args_dict['model'] + '_robust.pt')
+               args_dict['save_file_name'])
 
 
 if __name__ == '__main__':
