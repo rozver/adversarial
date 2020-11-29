@@ -67,9 +67,8 @@ def main():
     parser.add_argument('--dataset', type=str, default='dataset/imagenet-airplanes-images.pt')
     parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--adversarial', default=False, action='store_true')
-    args_ns = parser.parse_args()
+    args_dict = vars(parser.parse_args())
 
-    args_dict = vars(args_ns)
     pgd_args_dict = {
         'model': 'resnet50',
         'dataset': 'dataset/imagenet-airplanes-images.pt',
@@ -77,7 +76,7 @@ def main():
         'eps': 8/255.0,
         'norm': 'linf',
         'step_size': 1/255.0,
-        'num_iterations': 10,
+        'num_iterations': 40,
         'targeted': False,
         'eot': False,
         'transfer': False,
@@ -94,7 +93,7 @@ def main():
 
     trainer = Trainer(model, args_dict, pgd_args_dict)
     trainer.switch_to_adversarial()
-    trainer.fit(data_loader, 1)
+    trainer.fit(data_loader, args_dict['epochs'])
 
     torch.save({'state_dict': model.state_dict(), 'training_args': args_dict, 'pgd_args': pgd_args_dict},
                'models/' + args_dict['model'] + '_robust.pt')
