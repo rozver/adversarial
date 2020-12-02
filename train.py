@@ -1,6 +1,7 @@
 import torch
 from pgd import Attacker, MODELS_DICT
 import argparse
+from dataset_utils import create_data_loaders
 
 
 class Trainer:
@@ -17,23 +18,19 @@ class Trainer:
         self.losses = []
 
     def fit(self, images, labels):
-        self.model = self.model.cuda().train()
-
         for epoch in range(self.training_args_dict['epochs']):
-            images_loader = torch.utils.data.DataLoader(images, batch_size=10, num_workers=4)
-            labels_loader = torch.utils.data.DataLoader(labels, batch_size=10, num_workers=4)
-
             current_loss = 0.0
+            images_loader, labels_loader = create_data_loaders(images, labels, shuffle=True)
 
             for images_batch, labels_batch in zip(images_loader, labels_loader):
                 if self.adversarial:
-                    images_batch = self.get_adversarial_examples(images_batch, labels_batch)
+                    images_batch = self.create_adversarial_examples(images_batch, labels_batch)
+
+                self.model = self.model.cuda().train()
+                predictions = self.model(images_batch.cuda())
 
                 self.optimizer.zero_grad()
-
-                predictions = self.model.cuda()(images_batch.cuda())
                 loss = self.criterion(predictions, labels_batch.cuda())
-
                 loss.backward()
                 self.optimizer.step()
 
@@ -46,23 +43,13 @@ class Trainer:
 
             self.losses.append(epoch)
 
-    def switch_to_normal(self):
-        self.adversarial = False
-
-    def switch_to_adversarial(self):
-        self.adversarial = True
-
-    def get_model(self):
-        return self.model
-
-    def get_losses(self):
-        return self.losses
-
-    def get_adversarial_examples(self, images_batch, labels_batch):
-        mask = None
+    def create_adversarial_examples(self, images_batch, labels_batch):
         if self.attacker is None:
             self.attacker = Attacker(self.model.cpu().eval(), self.pgd_args_dict)
 
+        self.attacker.model = self.model.cpu().eval()
+
+        mask = None
         adversarial_batch = None
 
         for image, label in zip(images_batch, labels_batch):
@@ -78,13 +65,20 @@ class Trainer:
 
         return adversarial_batch
 
+    def serialize(self):
+        torch.save({'state_dict': self.model.state_dict(),
+                    'training_args': self.training_args_dict,
+                    'pgd_args': self.pgd_args_dict,
+                    'losses': self.losses},
+                   self.training_args_dict['save_file_name'])
+
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', type=str, choices=MODELS_DICT.keys(), default='resnet50')
     parser.add_argument('--dataset', type=str, default='dataset/imagenet-airplanes-images.pt')
     parser.add_argument('--epochs', type=int, default=10)
-    parser.add_argument('--learning_rate', type=float, default=1e-1)
+    parser.add_argument('--learning_rate', type=float, default=1e-2)
     parser.add_argument('--adversarial', default=False, action='store_true')
     parser.add_argument('--save_file_name', type=str, default='models/resnet50_robust.pt')
     args_dict = vars(parser.parse_args())
@@ -93,7 +87,7 @@ def main():
         'model': 'resnet50',
         'dataset': 'dataset/imagenet-airplanes-images.pt',
         'masks': False,
-        'eps': 8/255.0,
+        'eps': 32/255.0,
         'norm': 'linf',
         'step_size': 1/255.0,
         'num_iterations': 40,
@@ -105,16 +99,11 @@ def main():
     images = torch.load('dataset/imagenet-airplanes-images.pt')
     labels = torch.load('dataset/imagenet-airplanes-labels.pt')
 
-    model = MODELS_DICT.get(args_dict['model']).cuda().train()
+    model = MODELS_DICT.get(args_dict['model'])
 
     trainer = Trainer(model, args_dict, pgd_args_dict)
     trainer.fit(images, labels)
-
-    torch.save({'state_dict': model.state_dict(),
-                'training_args': args_dict,
-                'pgd_args': pgd_args_dict,
-                'losses': trainer.get_losses()},
-               args_dict['save_file_name'])
+    trainer.serialize()
 
 
 if __name__ == '__main__':
