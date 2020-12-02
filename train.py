@@ -2,13 +2,20 @@ import torch
 from pgd import Attacker, MODELS_DICT
 import argparse
 from dataset_utils import create_data_loaders
+from model_utils import get_model, load_model_from_state_dict
 
 
 class Trainer:
-    def __init__(self, model, training_args_dict, pgd_args_dict,
+    def __init__(self, training_args_dict, pgd_args_dict,
                  criterion=torch.nn.CrossEntropyLoss(),
                  optimizer=torch.optim.Adam):
-        self.model = model
+
+        if training_args_dict['checkpoint_location'] is not None:
+            self.model = load_model_from_state_dict(location=training_args_dict['checkpoint_location'])
+            training_args_dict['model'] = self.model.name
+        else:
+            self.model = get_model(model_name=training_args_dict['model'], pretrained=training_args_dict['pretrained'])
+
         self.training_args_dict = training_args_dict
         self.pgd_args_dict = pgd_args_dict
         self.adversarial = training_args_dict['adversarial']
@@ -76,7 +83,8 @@ class Trainer:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', type=str, choices=MODELS_DICT.keys(), default='resnet50')
-    parser.add_argument('--dataset', type=str, default='dataset/imagenet-airplanes-images.pt')
+    parser.add_argument('--pretrained', default=False, action='store_true')
+    parser.add_argument('--checkpoint_location', type=str, default=None)
     parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--learning_rate', type=float, default=1e-2)
     parser.add_argument('--adversarial', default=False, action='store_true')
@@ -84,7 +92,7 @@ def main():
     args_dict = vars(parser.parse_args())
 
     pgd_args_dict = {
-        'model': 'resnet50',
+        'model': args_dict['model'],
         'dataset': 'dataset/imagenet-airplanes-images.pt',
         'masks': False,
         'eps': 32/255.0,
@@ -99,9 +107,7 @@ def main():
     images = torch.load('dataset/imagenet-airplanes-images.pt')
     labels = torch.load('dataset/imagenet-airplanes-labels.pt')
 
-    model = MODELS_DICT.get(args_dict['model'])
-
-    trainer = Trainer(model, args_dict, pgd_args_dict)
+    trainer = Trainer(args_dict, pgd_args_dict)
     trainer.fit(images, labels)
     trainer.serialize()
 
