@@ -18,6 +18,21 @@ def normalize_names(location):
             os.remove(os.path.join(location, image))
 
 
+def shuffle_dataset(images, labels):
+    dataset = list(zip(images.all_images, labels))
+    np.random.shuffle(dataset)
+    images.all_images, labels = zip(*dataset)
+    return images, labels
+
+
+def create_data_loaders(images, labels, shuffle=True):
+    if shuffle:
+        images, labels = shuffle_dataset(images, labels)
+    images_loader = torch.utils.data.DataLoader(images, batch_size=10, num_workers=4)
+    labels_loader = torch.utils.data.DataLoader(labels, batch_size=10, num_workers=4)
+    return images_loader, labels_loader
+
+
 class Normalizer(torch.nn.Module, ABC):
     def __init__(self, mean, std):
         super(Normalizer, self).__init__()
@@ -76,7 +91,7 @@ class ImageNetPreprocessor:
             labels = self.labels
 
             if self.rgb:
-                torch.save(images, self.location+'-images.pt')
+                torch.save(images, self.location + '-images.pt')
                 torch.save(labels, self.location + '-labels.pt')
             else:
                 torch.save(images, self.location + '-images-grayscale.pt')
@@ -97,6 +112,7 @@ class CocoCategoryPreprocessor:
         else:
             raise ValueError('Invalid dataset location!')
         self.category = category
+        self.dataset = None
 
     def export_images_and_masks(self):
         categories_file = open(os.path.join(self.location, 'categories_list.txt'))
@@ -137,13 +153,23 @@ class CocoCategoryPreprocessor:
         else:
             raise ValueError('Incorrect category type specified!')
 
-    def serialize(self):
+    def set_dataset(self):
         category_location = os.path.join(self.location, self.category)
         if os.path.exists(category_location):
             dataset = datasets.CocoCategory(self.location, self.category, transform=transforms.ToTensor())
-            torch.save(dataset, category_location+'.pt')
+            self.dataset = dataset
         else:
-            raise ValueError('Dataset images and masks not exported!')
+            raise ValueError('Dataset images and masks for the chosen category are not exported!')
+
+    def get_dataset(self):
+        return self.dataset
+
+    def serialize(self):
+        category_location = os.path.join(self.location, self.category)
+        if self.dataset is not None:
+            torch.save(self.dataset, category_location + '.pt')
+        else:
+            raise ValueError('Dataset not set!')
 
     def run(self):
         self.export_images_and_masks()
