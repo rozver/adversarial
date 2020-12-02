@@ -7,7 +7,7 @@ import argparse
 import datetime
 
 TARGET_CLASS = 934
-MODELS_DICT = get_models_dict()
+MODELS_DICT = get_models_dict(pretrained=True)
 
 
 def get_current_time():
