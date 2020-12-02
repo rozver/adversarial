@@ -91,7 +91,7 @@ class ImageNetPreprocessor:
             labels = self.labels
 
             if self.rgb:
-                torch.save(images, self.location+'-images.pt')
+                torch.save(images, self.location + '-images.pt')
                 torch.save(labels, self.location + '-labels.pt')
             else:
                 torch.save(images, self.location + '-images-grayscale.pt')
@@ -167,7 +167,7 @@ class CocoCategoryPreprocessor:
     def serialize(self):
         category_location = os.path.join(self.location, self.category)
         if self.dataset is not None:
-            torch.save(self.dataset, category_location+'.pt')
+            torch.save(self.dataset, category_location + '.pt')
         else:
             raise ValueError('Dataset not set!')
 
