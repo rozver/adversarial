@@ -7,7 +7,7 @@ from dataset_utils import create_data_loaders
 class Trainer:
     def __init__(self, model, training_args_dict, pgd_args_dict,
                  criterion=torch.nn.CrossEntropyLoss(),
-                 optimizer=torch.optim.SGD):
+                 optimizer=torch.optim.Adam):
         self.model = model
         self.training_args_dict = training_args_dict
         self.pgd_args_dict = pgd_args_dict
@@ -57,11 +57,11 @@ class Trainer:
                 mask = torch.ones(image.size())
 
             if adversarial_batch is None:
-                adversarial_batch = (self.attacker(image=image, mask=mask, target=label)).unsqueeze(0)
+                adversarial_batch = self.attacker(image=image, mask=mask, target=label, random_start=True).unsqueeze(0)
                 continue
 
-            adversarial_example = self.attacker(image=image, mask=mask, target=label)
-            adversarial_batch = torch.cat((adversarial_batch, adversarial_example.unsqueeze(0)), 0)
+            adversarial_example = self.attacker(image=image, mask=mask, target=label, random_start=True).unsqueeze(0)
+            adversarial_batch = torch.cat((adversarial_batch, adversarial_example), 0)
 
         return adversarial_batch
 
@@ -89,8 +89,8 @@ def main():
         'masks': False,
         'eps': 32/255.0,
         'norm': 'linf',
-        'step_size': 1/255.0,
-        'num_iterations': 40,
+        'step_size': 16/255.0,
+        'num_iterations': 1,
         'targeted': False,
         'eot': False,
         'transfer': False,
