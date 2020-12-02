@@ -1,7 +1,7 @@
 import torch
 from pgd_attack_steps import LinfStep, L2Step
 import random
-from adversarial_transfer_models import get_models_dict
+from model_utils import get_models_dict
 from transformations import get_transformation
 import argparse
 import datetime

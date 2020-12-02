@@ -1,6 +1,6 @@
 import torch
 from torch.nn.functional import softmax
-from adversarial_transfer_models import get_models_dict
+from model_utils import get_models_dict
 from pgd import get_current_time
 import argparse
 
