@@ -18,6 +18,21 @@ def normalize_names(location):
             os.remove(os.path.join(location, image))
 
 
+def shuffle_dataset(images, labels):
+    dataset = list(zip(images.all_images, labels))
+    np.random.shuffle(dataset)
+    images.all_images, labels = zip(*dataset)
+    return images, labels
+
+
+def create_data_loaders(images, labels, shuffle=True):
+    if shuffle:
+        images, labels = shuffle_dataset(images, labels)
+    images_loader = torch.utils.data.DataLoader(images, batch_size=10, num_workers=4)
+    labels_loader = torch.utils.data.DataLoader(labels, batch_size=10, num_workers=4)
+    return images_loader, labels_loader
+
+
 class Normalizer(torch.nn.Module, ABC):
     def __init__(self, mean, std):
         super(Normalizer, self).__init__()
@@ -159,8 +174,3 @@ class CocoCategoryPreprocessor:
     def run(self):
         self.export_images_and_masks()
         self.serialize()
-
-
-coco = CocoCategoryPreprocessor('dataset/coco', 'airplane')
-coco.set_dataset()
-coco.serialize()
