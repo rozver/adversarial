@@ -25,11 +25,11 @@ def shuffle_dataset(images, labels):
     return images, labels
 
 
-def create_data_loaders(images, labels, shuffle=True):
+def create_data_loaders(images, labels, batch_size=10, num_workers=4, shuffle=True):
     if shuffle:
         images, labels = shuffle_dataset(images, labels)
-    images_loader = torch.utils.data.DataLoader(images, batch_size=10, num_workers=4)
-    labels_loader = torch.utils.data.DataLoader(labels, batch_size=10, num_workers=4)
+    images_loader = torch.utils.data.DataLoader(images, batch_size=batch_size, num_workers=num_workers)
+    labels_loader = torch.utils.data.DataLoader(labels, batch_size=batch_size, num_workers=num_workers)
     return images_loader, labels_loader
 
 
