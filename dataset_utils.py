@@ -173,4 +173,5 @@ class CocoCategoryPreprocessor:
 
     def run(self):
         self.export_images_and_masks()
+        self.set_dataset()
         self.serialize()
