@@ -33,6 +33,14 @@ def create_data_loaders(images, labels, batch_size=10, num_workers=4, shuffle=Tr
     return images_loader, labels_loader
 
 
+def serialize_all_coco_categories(location):
+    categories_list_file = open(os.path.join(location, 'categories_list.txt'))
+    for category in categories_list_file.readlines():
+        print(category)
+        preprocessor = CocoCategoryPreprocessor(location, category[:1])
+        preprocessor.serialize()
+
+
 class Normalizer(torch.nn.Module, ABC):
     def __init__(self, mean, std):
         super(Normalizer, self).__init__()
@@ -175,3 +183,11 @@ class CocoCategoryPreprocessor:
         self.export_images_and_masks()
         self.set_dataset()
         self.serialize()
+
+
+def main():
+    serialize_all_coco_categories('dataset/coco')
+
+
+if __name__ == '__main__':
+    main()
