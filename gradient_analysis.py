@@ -28,7 +28,7 @@ def get_averages(grad, mask):
 
 
 def main():
-    results = []
+    results = {}
     dataset_location = 'dataset/coco'
     for category_file in os.listdir(dataset_location):
         if category_file.endswith('.pt'):
@@ -45,7 +45,7 @@ def main():
                 if abs(foreground_grad_average) > abs(background_grad_average):
                     success += 1
 
-            results.append(images.category + ': ' + str(success)+'/'+str(images.__len__()))
+            results[images.category] = float(success)/images.__len__()
 
     torch.save(results, 'results/gradient.pt')
 
