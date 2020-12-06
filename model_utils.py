@@ -51,7 +51,7 @@ def load_model(location, arch=None, from_robustness=False):
         if arch is None:
             raise ValueError('Please, specify model architecture name when loading with robustness')
         dataset = ImageNet('dataset/imagenet-airplanes')
-        model, _ = make_and_restore_model(arch=arch, dataset=dataset, resume_path='models/checkpoint.pt.best')
+        model, _ = make_and_restore_model(arch=arch, dataset=dataset, resume_path=location)
         return model
     if arch is not None:
         state_dict = get_state_dict(location=location, return_model_name=False)
