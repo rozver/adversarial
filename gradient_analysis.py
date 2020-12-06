@@ -1,7 +1,7 @@
 import torch
 from torch import autograd
 import os
-from model_utils import get_model, get_models_dict, load_model_from_state_dict
+from model_utils import get_model, get_models_dict, load_model
 import argparse
 from pgd import get_current_time
 
@@ -34,15 +34,16 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', type=str, choices=get_models_dict().keys(), default='resnet50')
-    parser.add_argument('--pretrained', default=True, action='store_true')
+    parser.add_argument('--pretrained', default=False, action='store_true')
     parser.add_argument('--checkpoint_location', type=str, default=None)
+    parser.add_argument('--from_robustness', default=False, action='store_true')
     parser.add_argument('--save_file_name', type=str, default='results/gradient/' + time + '.pt')
     args = parser.parse_args()
 
     if args.checkpoint_location is not None:
-        model = load_model_from_state_dict(location=args.checkpoint_location,
-                                           state_dict_key='state_dict',
-                                           model_name=args.model).cuda().eval()
+        model = load_model(location=args.checkpoint_location,
+                           arch=args.model,
+                           from_robustness=args.from_robustness).cuda().eval()
     else:
         model = get_model(args.model, pretrained=args.pretrained).cuda().eval()
 
@@ -64,7 +65,7 @@ def main():
 
             results[images.category] = float(success)/images.__len__()
 
-    torch.save(results, args.save_file_name)
+    torch.save({'results': results, 'args': args}, args.save_file_name)
 
 
 if __name__ == '__main__':
