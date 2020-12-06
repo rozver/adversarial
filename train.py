@@ -2,7 +2,7 @@ import torch
 from pgd import Attacker, MODELS_DICT
 import argparse
 from dataset_utils import create_data_loaders
-from model_utils import get_model, load_model_from_state_dict
+from model_utils import get_model, load_model
 
 
 class Trainer:
@@ -11,10 +11,10 @@ class Trainer:
                  optimizer=torch.optim.Adam):
 
         if training_args_dict['checkpoint_location'] is not None:
-            self.model = load_model_from_state_dict(location=training_args_dict['checkpoint_location'])
+            self.model = load_model(location=training_args_dict['checkpoint_location'])
             training_args_dict['model'] = self.model.name
         else:
-            self.model = get_model(model_name=training_args_dict['model'], pretrained=training_args_dict['pretrained'])
+            self.model = get_model(arch=training_args_dict['model'], pretrained=training_args_dict['pretrained'])
 
         self.training_args_dict = training_args_dict
         self.pgd_args_dict = pgd_args_dict
