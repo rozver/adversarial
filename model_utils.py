@@ -2,6 +2,7 @@ import torch
 import torchvision
 from robustness.datasets import  ImageNet
 from robustness.model_utils import make_and_restore_model
+import os
 
 
 def get_models_dict(pretrained=False):
@@ -47,16 +48,19 @@ def get_state_dict(location, return_model_name=False):
 
 
 def load_model(location, arch=None, from_robustness=False):
-    if from_robustness:
-        if arch is None:
-            raise ValueError('Please, specify model architecture name when loading with robustness')
-        dataset = ImageNet('dataset/imagenet-airplanes')
-        model, _ = make_and_restore_model(arch=arch, dataset=dataset, resume_path=location)
+    if os.path.exists(location):
+        if from_robustness:
+            if arch is None:
+                raise ValueError('Please, specify model architecture name when loading with robustness')
+            dataset = ImageNet('dataset/imagenet-airplanes')
+            model, _ = make_and_restore_model(arch=arch, dataset=dataset, resume_path=location)
+            return model
+        if arch is not None:
+            state_dict = get_state_dict(location=location, return_model_name=False)
+        else:
+            state_dict = get_state_dict(location=location, return_model_name=True)
+        model = get_model(arch=arch, pretrained=False)
+        model.load_state_dict(state_dict)
         return model
-    if arch is not None:
-        state_dict = get_state_dict(location=location, return_model_name=False)
     else:
-        state_dict = get_state_dict(location=location, return_model_name=True)
-    model = get_model(arch=arch, pretrained=False)
-    model.load_state_dict(state_dict)
-    return model
+        raise ValueError('Invalid checkpoint location')
