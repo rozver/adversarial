@@ -1,7 +1,9 @@
 import torch
-import torchvision
 from torch import autograd
 import os
+from model_utils import get_model, get_models_dict, load_model_from_state_dict
+import argparse
+from pgd import get_current_time
 
 
 def get_gradient(model, image, label, criterion):
@@ -28,13 +30,28 @@ def get_averages(grad, mask):
 
 
 def main():
-    results = []
+    time = get_current_time()
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--model', type=str, choices=get_models_dict().keys(), default='resnet50')
+    parser.add_argument('--pretrained', default=True, action='store_true')
+    parser.add_argument('--checkpoint_location', type=str, default=None)
+    parser.add_argument('--save_file_name', type=str, default='results/gradient-' + time + '.pt')
+    args = parser.parse_args()
+
+    if args.checkpoint_location is not None:
+        model = load_model_from_state_dict(location=args.checkpoint_location,
+                                           state_dict_key='state_dict',
+                                           model_name=args.model).cuda().eval()
+    else:
+        model = get_model(args.model, pretrained=args.pretrained).cuda().eval()
+
+    results = {}
     dataset_location = 'dataset/coco'
     for category_file in os.listdir(dataset_location):
         if category_file.endswith('.pt'):
             success = 0
             images = torch.load(os.path.join(dataset_location, category_file))
-            model = torchvision.models.resnet50(pretrained=True).cuda().eval()
             criterion = torch.nn.CrossEntropyLoss(reduction='none')
             for image, mask in images:
                 if mask.size(0) != 3:
@@ -45,9 +62,9 @@ def main():
                 if abs(foreground_grad_average) > abs(background_grad_average):
                     success += 1
 
-            results.append(images.category + ': ' + str(success)+'/'+str(images.__len__()))
+            results[images.category] = float(success)/images.__len__()
 
-    torch.save(results, 'results/gradient.pt')
+    torch.save(results, args.save_file_name)
 
 
 if __name__ == '__main__':
