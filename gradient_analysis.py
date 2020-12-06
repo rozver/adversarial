@@ -57,7 +57,7 @@ def main():
             for image, mask in images:
                 if mask.size(0) != 3:
                     mask = mask.expand(3, mask.size(0), mask.size(1))
-                label = torch.argmax(model(image.cuda().unsqueeze(0))[0])
+                label = torch.argmax(model(image.cuda().unsqueeze(0))).unsqueeze(0)
                 grad = get_gradient(model, image, label, criterion)
                 foreground_grad_average, background_grad_average = get_averages(grad, mask)
                 if abs(foreground_grad_average) > abs(background_grad_average):
