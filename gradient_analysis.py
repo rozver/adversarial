@@ -36,7 +36,7 @@ def main():
     parser.add_argument('--model', type=str, choices=get_models_dict().keys(), default='resnet50')
     parser.add_argument('--pretrained', default=True, action='store_true')
     parser.add_argument('--checkpoint_location', type=str, default=None)
-    parser.add_argument('--save_file_name', type=str, default='results/gradient-' + time + '.pt')
+    parser.add_argument('--save_file_name', type=str, default='results/gradient/' + time + '.pt')
     args = parser.parse_args()
 
     if args.checkpoint_location is not None:
