@@ -6,11 +6,18 @@ import argparse
 from pgd import get_current_time
 
 
-def get_gradient(model, image, label, criterion):
+def get_prediction(model, image):
+    prediction = model(image.cuda().unsqueeze(0))
+    if args.from_robustness:
+        return prediction[0]
+    return prediction
+
+
+def get_gradient(model, image, label, criterion, args):
     image = autograd.Variable(image, requires_grad=True).cuda()
 
-    predictions = model(image.unsqueeze(0))
-    loss = criterion(predictions, label)
+    prediction = get_prediction(model, image, args)
+    loss = criterion(prediction, label)
 
     grad = autograd.grad(loss, image)[0]
     return grad.cpu()
@@ -57,8 +64,9 @@ def main():
             for image, mask in images:
                 if mask.size(0) != 3:
                     mask = mask.expand(3, mask.size(0), mask.size(1))
-                label = torch.argmax(model(image.cuda().unsqueeze(0))).unsqueeze(0)
-                grad = get_gradient(model, image, label, criterion)
+                prediction = get_prediction(model, image, args)
+                label = torch.argmax(prediction, dim=1)
+                grad = get_gradient(model, image, label, criterion, args)
                 foreground_grad_average, background_grad_average = get_averages(grad, mask)
                 if abs(foreground_grad_average) > abs(background_grad_average):
                     success += 1
