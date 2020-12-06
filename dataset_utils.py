@@ -175,19 +175,3 @@ class CocoCategoryPreprocessor:
         self.export_images_and_masks()
         self.set_dataset()
         self.serialize()
-
-
-def serialize_all_coco_categories(location):
-    categories_list_file = open(os.path.join(location, 'categories_list.txt'))
-    for category in categories_list_file.readlines():
-        category = category[:-1]
-        preprocessor = CocoCategoryPreprocessor(location, category)
-        preprocessor.run()
-
-
-def main():
-    serialize_all_coco_categories('dataset/coco')
-
-
-if __name__ == '__main__':
-    main()
