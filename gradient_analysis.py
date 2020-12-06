@@ -60,6 +60,8 @@ def main():
         if category_file.endswith('.pt'):
             success = 0
             images = torch.load(os.path.join(dataset_location, category_file))
+            if images.__len__() == 0:
+                continue
             criterion = torch.nn.CrossEntropyLoss(reduction='none')
             for image, mask in images:
                 if mask.size(0) != 3:
