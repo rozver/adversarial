@@ -10,7 +10,7 @@ def get_models_dict(pretrained=False):
         'alexnet': torchvision.models.alexnet(pretrained=pretrained).eval(),
         'vgg16': torchvision.models.vgg16(pretrained=pretrained).eval(),
         'vgg19': torchvision.models.vgg19(pretrained=pretrained).eval(),
-        'inception_v3': torchvision.models.inception_v3(pretrained=pretrained).eval(),
+        'inception_v3': torchvision.models.inception_v3(pretrained=pretrained, init_weights=True).eval(),
     }
 
     return models
