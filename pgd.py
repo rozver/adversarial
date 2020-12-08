@@ -1,13 +1,12 @@
 import torch
 from pgd_attack_steps import LinfStep, L2Step
 import random
-from model_utils import get_models_dict
+from model_utils import get_model, MODELS_LIST
 from transformations import get_transformation
 import argparse
 import datetime
 
 TARGET_CLASS = 934
-MODELS_DICT = get_models_dict(pretrained=True)
 
 
 def get_current_time():
@@ -31,9 +30,9 @@ class Attacker:
 
         if args_dict['transfer']:
             self.loss = self.transfer_loss
-            self.surrogate_models = [MODELS_DICT[model_key].eval()
-                                     for model_key in MODELS_DICT.keys()
-                                     if model_key != args_dict['model']
+            self.surrogate_models = [get_model(arch, pretrained=True).eval()
+                                     for arch in MODELS_LIST
+                                     if arch != args_dict['arch']
                                      ]
         else:
             self.loss = self.normal_loss
@@ -132,7 +131,7 @@ def main():
     time = get_current_time()
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model', type=str, choices=MODELS_DICT.keys(), default='resnet50')
+    parser.add_argument('--arch', type=str, choices=MODELS_LIST, default='resnet50')
     parser.add_argument('--dataset', type=str, default='dataset/imagenet-airplanes-images.pt')
     parser.add_argument('--masks', default=False, action='store_true')
     parser.add_argument('--eps', type=float, default=8)
@@ -152,7 +151,7 @@ def main():
     print('Running PGD experiment with the following arguments:')
     print(str(args_dict)+'\n')
 
-    model = MODELS_DICT.get(args_dict['model'])
+    model = get_model(args_dict['arch'], pretrained=True).eval()
 
     attacker = Attacker(model, args_dict)
     target = torch.FloatTensor([TARGET_CLASS])

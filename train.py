@@ -1,8 +1,8 @@
 import torch
-from pgd import Attacker, MODELS_DICT
+from pgd import Attacker
 import argparse
 from dataset_utils import create_data_loaders
-from model_utils import get_model, load_model
+from model_utils import MODELS_LIST, get_model, load_model
 
 
 class Trainer:
@@ -12,9 +12,9 @@ class Trainer:
 
         if training_args_dict['checkpoint_location'] is not None:
             self.model = load_model(location=training_args_dict['checkpoint_location'])
-            training_args_dict['model'] = self.model.name
+            training_args_dict['arch'] = self.model.arch
         else:
-            self.model = get_model(arch=training_args_dict['model'], pretrained=training_args_dict['pretrained'])
+            self.model = get_model(arch=training_args_dict['arch'], pretrained=training_args_dict['pretrained'])
 
         self.training_args_dict = training_args_dict
         self.pgd_args_dict = pgd_args_dict
@@ -82,7 +82,7 @@ class Trainer:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model', type=str, choices=MODELS_DICT.keys(), default='resnet50')
+    parser.add_argument('--arch', type=str, choices=MODELS_LIST, default='resnet50')
     parser.add_argument('--pretrained', default=False, action='store_true')
     parser.add_argument('--checkpoint_location', type=str, default=None)
     parser.add_argument('--epochs', type=int, default=10)
@@ -92,7 +92,7 @@ def main():
     args_dict = vars(parser.parse_args())
 
     pgd_args_dict = {
-        'model': args_dict['model'],
+        'arch': args_dict['arch'],
         'dataset': 'dataset/imagenet-airplanes-images.pt',
         'masks': False,
         'eps': 32/255.0,
