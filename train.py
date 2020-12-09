@@ -1,7 +1,7 @@
 import torch
 from pgd import Attacker
 import argparse
-from dataset_utils import create_data_loaders
+from dataset_utils import create_data_loaders, Normalizer
 from model_utils import MODELS_LIST, get_model, load_model
 
 
@@ -16,6 +16,7 @@ class Trainer:
         else:
             self.model = get_model(arch=training_args_dict['arch'], pretrained=training_args_dict['pretrained'])
 
+        self.normalize = Normalizer(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         self.training_args_dict = training_args_dict
         self.pgd_args_dict = pgd_args_dict
         self.adversarial = training_args_dict['adversarial']
@@ -34,7 +35,7 @@ class Trainer:
                     images_batch = self.create_adversarial_examples(images_batch, labels_batch)
 
                 self.model = self.model.cuda().train()
-                predictions = self.model(images_batch.cuda())
+                predictions = self.model(self.normalize(images_batch.cuda()))
 
                 self.optimizer.zero_grad()
                 loss = self.criterion(predictions, labels_batch.cuda())
