@@ -43,7 +43,7 @@ def compare_absolute_difference(grad, mask):
     return 0
 
 
-def get_all_gradients(model, criterion, args):
+def get_grad_dict(model, criterion, args):
     grads_dict = {}
     for category_file in os.listdir(args.dataset):
         category_grads = []
@@ -85,6 +85,29 @@ def normalize_grads_dict(grads_dict):
     return grads_dict
 
 
+def get_category_average(grads, dataset):
+    foreground_average = torch.zeros(1)
+    background_average = torch.zeros(1)
+    for grad, (_, mask) in zip(grads, dataset):
+        foreground_grad_average, background_grad_average = get_averages(grad, mask)
+        foreground_average = foreground_average.sum(foreground_grad_average)
+        background_average = background_average.sum(background_grad_average)
+
+    foreground_average = torch.mean(foreground_average)
+    background_average = torch.mean(background_average)
+
+    return foreground_average, background_average
+
+
+def get_averages_by_category(grads_dict, args):
+    categories_averages = {}
+    for category in grads_dict.keys():
+        category_dataset = torch.load(os.path.join(args.dataset, category+'.pt'))
+        foreground_average, background_average = get_category_average(grads_dict[category], category_dataset)
+        categories_averages[category] = [foreground_average, background_average]
+    return categories_averages
+
+
 def main():
     time = get_current_time()
 
@@ -106,10 +129,14 @@ def main():
 
     criterion = torch.nn.CrossEntropyLoss(reduction='none')
 
-    grads_dict = get_all_gradients(model, criterion, args)
-    grads_dict_normalized = normalize_grads_dict(grads_dict)
+    grads_dict = get_grad_dict(model, criterion, args)
+    averages_regular = get_averages_by_category(grads_dict, args)
 
-    torch.save({'grads': grads_dict, 'grads_normalized': grads_dict_normalized, 'args': args}, args.save_file_name)
+    grads_dict_normalized = normalize_grads_dict(grads_dict)
+    averages_normalized = get_averages_by_category(grads_dict_normalized, args)
+
+    torch.save({'averages_regular': averages_regular, 'averages_normalized': averages_normalized, 'args': args},
+               args.save_file_name)
 
 
 if __name__ == '__main__':
