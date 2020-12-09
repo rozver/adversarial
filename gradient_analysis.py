@@ -65,11 +65,15 @@ def get_all_gradients(model, criterion, args):
 
 
 def normalize_grad(grad):
-    mean_grad = torch.mean(grad)
-    std_grad = torch.std(grad)
+    mean_grad = torch.cuda.FloatTensor([[[torch.mean(grad[0])]],
+                                        [[torch.mean(grad[1])]],
+                                        [[torch.mean(grad[2])]]]).repeat(1, grad.size(1), grad.size(2))
+    std_grad = torch.cuda.FloatTensor([[[torch.std(grad[0])]],
+                                       [[torch.std(grad[1])]],
+                                       [[torch.std(grad[2])]]]).repeat(1, grad.size(1), grad.size(2))
 
-    normalized_grad = (grad-mean_grad)/std_grad
-    return normalized_grad
+    normalized_grad = (grad.cuda() - mean_grad) / std_grad
+    return normalized_grad.cpu()
 
 
 def normalize_grads_dict(grads_dict):
