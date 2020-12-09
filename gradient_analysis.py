@@ -36,6 +36,51 @@ def get_averages(grad, mask):
     return foreground_grad_average, background_grad_average
 
 
+def compare_absolute_difference(grad, mask):
+    foreground_grad_average, background_grad_average = get_averages(grad, mask)
+    if abs(foreground_grad_average) > abs(background_grad_average):
+        return 1
+    return 0
+
+
+def get_all_gradients(model, criterion, args):
+    grads_dict = {}
+    for category_file in os.listdir(args.dataset):
+        category_grads = []
+        if category_file.endswith('.pt'):
+            images = torch.load(os.path.join(args.dataset, category_file))
+
+            if images.__len__() == 0:
+                continue
+            for image, _ in images:
+                prediction = get_prediction(model, image.cuda())
+                label = torch.argmax(prediction, dim=1).cuda()
+
+                current_grad = get_gradient(model, image, label, criterion)
+                category_grads.append(current_grad)
+
+            grads_dict[images.category] = category_grads
+
+    return grads_dict
+
+
+def normalize_grad(grad):
+    mean_grad = torch.mean(grad)
+    std_grad = torch.std(grad)
+
+    normalized_grad = (grad-mean_grad)/std_grad
+    return normalized_grad
+
+
+def normalize_grads_dict(grads_dict):
+    for key in grads_dict.keys():
+        grads = grads_dict[key]
+        for i in range(0, len(grads)):
+            grads[i] = normalize_grad(grads[i])
+        grads_dict[key] = grads
+    return grads_dict
+
+
 def main():
     time = get_current_time()
 
@@ -44,6 +89,7 @@ def main():
     parser.add_argument('--pretrained', default=False, action='store_true')
     parser.add_argument('--checkpoint_location', type=str, default=None)
     parser.add_argument('--from_robustness', default=False, action='store_true')
+    parser.add_argument('--dataset', type=str, default='dataset/coco')
     parser.add_argument('--save_file_name', type=str, default='results/gradient/' + time + '.pt')
     args = parser.parse_args()
 
@@ -54,28 +100,12 @@ def main():
     else:
         model = get_model(args.arch, args.pretrained).cuda().eval()
 
-    results = {}
-    dataset_location = 'dataset/coco'
-    for category_file in os.listdir(dataset_location):
-        if category_file.endswith('.pt'):
-            success = 0
-            images = torch.load(os.path.join(dataset_location, category_file))
-            if images.__len__() == 0:
-                continue
-            criterion = torch.nn.CrossEntropyLoss(reduction='none')
-            for image, mask in images:
-                if mask.size(0) != 3:
-                    mask = mask.expand(3, mask.size(0), mask.size(1))
-                prediction = get_prediction(model, image.cuda())
-                label = torch.argmax(prediction, dim=1).cuda()
-                grad = get_gradient(model, image, label, criterion)
-                foreground_grad_average, background_grad_average = get_averages(grad, mask)
-                if abs(foreground_grad_average) > abs(background_grad_average):
-                    success += 1
+    criterion = torch.nn.CrossEntropyLoss(reduction='none')
 
-            results[images.category] = float(success) / images.__len__()
+    grads_dict = get_all_gradients(model, criterion, args)
+    grads_dict_normalized = normalize_grads_dict(grads_dict)
 
-    torch.save({'results': results, 'args': args}, args.save_file_name)
+    torch.save({'grads': grads_dict, 'grads_normalized': grads_dict_normalized, 'args': args}, args.save_file_name)
 
 
 if __name__ == '__main__':
