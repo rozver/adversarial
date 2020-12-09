@@ -23,30 +23,9 @@ def get_gradient(model, image, label, criterion):
     return grad.cpu()
 
 
-def get_averages(grad, mask):
-    grad_abs = grad*torch.sign(grad)
-
-    num_values = (mask.size(0) * mask.size(1) * mask.size(2))
-    num_zeros = num_values - torch.sum(mask)
-    num_ones = num_values - num_zeros
-
-    foreground_grad_sum = torch.sum(grad_abs * mask)
-    background_grad_sum = torch.sum(grad_abs) - foreground_grad_sum
-
-    foreground_grad_average = foreground_grad_sum / num_ones
-    background_grad_average = background_grad_sum / num_zeros
-    return foreground_grad_average, background_grad_average
-
-
-def compare_absolute_difference(grad, mask):
-    foreground_grad_average, background_grad_average = get_averages(grad, mask)
-    if abs(foreground_grad_average) > abs(background_grad_average):
-        return 1
-    return 0
-
-
 def get_grad_dict(model, criterion, args):
     grads_dict = {}
+
     for category_file in os.listdir(args.dataset):
         category_grads = []
         if category_file.endswith('.pt'):
@@ -59,7 +38,7 @@ def get_grad_dict(model, criterion, args):
                 label = torch.argmax(prediction, dim=1).cuda()
 
                 current_grad = get_gradient(model, image, label, criterion)
-                category_grads.append(current_grad)
+                category_grads.append(current_grad.cpu())
 
             grads_dict[images.category] = category_grads
 
@@ -87,18 +66,34 @@ def normalize_grads_dict(grads_dict):
     return grads_dict
 
 
+def get_averages(grad, mask):
+    grad_abs = grad*torch.sign(grad)
+
+    num_values = mask.size(0) * mask.size(1) * mask.size(2)
+    num_ones = torch.sum(mask)
+    num_zeros = num_values - num_ones
+
+    foreground_grad_sum = torch.sum(grad_abs * mask)
+    background_grad_sum = torch.sum(grad_abs) - foreground_grad_sum
+
+    foreground_grad_average = foreground_grad_sum / num_ones
+    background_grad_average = background_grad_sum / num_zeros
+    return foreground_grad_average, background_grad_average
+
+
 def get_category_average(grads, dataset):
-    foreground_average = torch.zeros(1, device='cuda')
-    background_average = torch.zeros(1, device='cuda')
+    foreground_average = 0
+    background_average = 0
+
     for grad, (_, mask) in zip(grads, dataset):
         foreground_grad_average, background_grad_average = get_averages(grad, mask)
-        foreground_average = foreground_average.add(foreground_grad_average)
-        background_average = background_average.add(background_grad_average)
+        foreground_average += foreground_grad_average
+        background_average += background_grad_average
 
-    foreground_average = torch.mean(foreground_average)
-    background_average = torch.mean(background_average)
+    foreground_average /= dataset.__len__()
+    background_average /= dataset.__len__()
 
-    return foreground_average, background_average
+    return foreground_average.cpu(), background_average.cpu()
 
 
 def get_averages_by_category(grads_dict, args):
