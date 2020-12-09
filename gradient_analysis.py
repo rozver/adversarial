@@ -24,12 +24,14 @@ def get_gradient(model, image, label, criterion):
 
 
 def get_averages(grad, mask):
+    grad_abs = grad*torch.sign(grad)
+
     num_values = (mask.size(0) * mask.size(1) * mask.size(2))
     num_zeros = num_values - torch.sum(mask)
     num_ones = num_values - num_zeros
 
-    foreground_grad_sum = torch.sum(grad * mask)
-    background_grad_sum = torch.sum(grad) - foreground_grad_sum
+    foreground_grad_sum = torch.sum(grad_abs * mask)
+    background_grad_sum = torch.sum(grad_abs) - foreground_grad_sum
 
     foreground_grad_average = foreground_grad_sum / num_ones
     background_grad_average = background_grad_sum / num_zeros
@@ -90,8 +92,8 @@ def get_category_average(grads, dataset):
     background_average = torch.zeros(1)
     for grad, (_, mask) in zip(grads, dataset):
         foreground_grad_average, background_grad_average = get_averages(grad, mask)
-        foreground_average = foreground_average.sum(foreground_grad_average)
-        background_average = background_average.sum(background_grad_average)
+        foreground_average = foreground_average.add(foreground_grad_average)
+        background_average = background_average.add(background_grad_average)
 
     foreground_average = torch.mean(foreground_average)
     background_average = torch.mean(background_average)
@@ -117,6 +119,7 @@ def main():
     parser.add_argument('--checkpoint_location', type=str, default=None)
     parser.add_argument('--from_robustness', default=False, action='store_true')
     parser.add_argument('--dataset', type=str, default='dataset/coco')
+    parser.add_argument('--normalize_grads', default=False, action='store_true')
     parser.add_argument('--save_file_name', type=str, default='results/gradient/' + time + '.pt')
     args = parser.parse_args()
 
@@ -130,12 +133,12 @@ def main():
     criterion = torch.nn.CrossEntropyLoss(reduction='none')
 
     grads_dict = get_grad_dict(model, criterion, args)
-    averages_regular = get_averages_by_category(grads_dict, args)
+    if args.normalize_grads:
+        grads_dict = normalize_grads_dict(grads_dict)
 
-    grads_dict_normalized = normalize_grads_dict(grads_dict)
-    averages_normalized = get_averages_by_category(grads_dict_normalized, args)
+    averages = get_averages_by_category(grads_dict, args)
 
-    torch.save({'averages_regular': averages_regular, 'averages_normalized': averages_normalized, 'args': args},
+    torch.save({'averages': averages, 'args': args},
                args.save_file_name)
 
 
