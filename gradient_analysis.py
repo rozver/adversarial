@@ -88,8 +88,8 @@ def normalize_grads_dict(grads_dict):
 
 
 def get_category_average(grads, dataset):
-    foreground_average = torch.zeros(1)
-    background_average = torch.zeros(1)
+    foreground_average = torch.zeros(1, device='cuda')
+    background_average = torch.zeros(1, device='cuda')
     for grad, (_, mask) in zip(grads, dataset):
         foreground_grad_average, background_grad_average = get_averages(grad, mask)
         foreground_average = foreground_average.add(foreground_grad_average)
