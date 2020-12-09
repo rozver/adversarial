@@ -29,18 +29,18 @@ def get_grad_dict(model, criterion, args):
     for category_file in os.listdir(args.dataset):
         category_grads = []
         if category_file.endswith('.pt'):
-            images = torch.load(os.path.join(args.dataset, category_file))
+            dataset = torch.load(os.path.join(args.dataset, category_file))
 
-            if images.__len__() == 0:
+            if dataset.__len__() == 0:
                 continue
-            for image, _ in images:
+            for image, _ in dataset:
                 prediction = get_prediction(model, image.cuda())
                 label = torch.argmax(prediction, dim=1).cuda()
 
                 current_grad = get_gradient(model, image, label, criterion)
                 category_grads.append(current_grad.cpu())
 
-            grads_dict[images.category] = category_grads
+            grads_dict[dataset.category] = category_grads
 
     return grads_dict
 
