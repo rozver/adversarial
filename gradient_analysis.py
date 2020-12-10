@@ -105,6 +105,31 @@ def get_averages_by_category(grads_dict, args):
     return categories_averages
 
 
+def get_averages_dict(model, criterion, args):
+    averages_dict = {}
+
+    for category_file in os.listdir(args.dataset):
+        category_grads = []
+        if category_file.endswith('.pt'):
+            dataset = torch.load(os.path.join(args.dataset, category_file))
+
+            if dataset.__len__() == 0:
+                continue
+            for image, _ in dataset:
+                prediction = get_prediction(model, image.cuda())
+                label = torch.argmax(prediction, dim=1).cuda()
+
+                current_grad = get_gradient(model, image, label, criterion)
+                if args.normalize_grads:
+                    current_grad = normalize_grad(current_grad)
+                category_grads.append(current_grad.cpu())
+
+            foreground_average, background_average = get_category_average(category_grads, dataset)
+            averages_dict[dataset.category] = [foreground_average, background_average]
+
+    return averages_dict
+
+
 def main():
     time = get_current_time()
 
@@ -127,12 +152,7 @@ def main():
 
     criterion = torch.nn.CrossEntropyLoss(reduction='none')
 
-    grads_dict = get_grad_dict(model, criterion, args)
-    if args.normalize_grads:
-        grads_dict = normalize_grads_dict(grads_dict)
-
-    averages = get_averages_by_category(grads_dict, args)
-
+    averages = get_averages_dict(model, criterion, args)
     torch.save({'averages': averages, 'args': args},
                args.save_file_name)
 
