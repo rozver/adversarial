@@ -55,6 +55,10 @@ def main():
         results = torch.load(results_location)
         successful_attacks = 0
 
+        if 'args' not in results.keys():
+            print('File ' + results_location + ' does not have dictionary key args')
+            continue
+
         if 'blackbox' in results['args'].save_file_name:
             results['args'].masks = False
 
