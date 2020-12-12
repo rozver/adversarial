@@ -94,7 +94,7 @@ def main():
     parser.add_argument('--model', type=str, choices=MODELS_LIST, default='resnet50')
     parser.add_argument('--dataset', type=str, default='dataset/imagenet-airplanes-images.pt')
     parser.add_argument('--masks', default=False, action='store_true')
-    parser.add_argument('--gradient_mask', default=False, action='store_true')
+    parser.add_argument('--gradient_masks', default=False, action='store_true')
     parser.add_argument('--attack_type', type=str, choices=['nes', 'simba'], default='simba')
     parser.add_argument('--eps', type=float, default=10)
     parser.add_argument('--num_iterations', type=int, default=1)
