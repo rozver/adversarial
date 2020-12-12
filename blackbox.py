@@ -1,10 +1,17 @@
 import torch
 from torch.nn.functional import softmax
-from model_utils import get_models_dict
+from model_utils import MODELS_LIST, get_model
 from pgd import get_current_time
 import argparse
+from gradient_analysis import get_gradient, normalize_grad
 
-MODELS_DICT = get_models_dict()
+
+def get_simba_gradient(model, image, criterion):
+    prediction = model(image.unsqueeze(0).cuda())
+    label = torch.argmax(prediction).unsqueeze(0)
+    grad = get_gradient(model, image, label, criterion)
+    grad_normalized = normalize_grad(grad)
+    return grad_normalized
 
 
 def get_probabilities(model, x, y):
@@ -84,22 +91,28 @@ def main():
     time = get_current_time()
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model', type=str, choices=MODELS_DICT.keys(), default='resnet50')
+    parser.add_argument('--model', type=str, choices=MODELS_LIST, default='resnet50')
     parser.add_argument('--dataset', type=str, default='dataset/imagenet-airplanes-images.pt')
     parser.add_argument('--masks', default=False, action='store_true')
+    parser.add_argument('--gradient_mask', default=False, action='store_true')
     parser.add_argument('--attack_type', type=str, choices=['nes', 'simba'], default='simba')
     parser.add_argument('--eps', type=float, default=10)
     parser.add_argument('--num_iterations', type=int, default=1)
     parser.add_argument('--save_file_name', type=str, default='results/blackbox/' + time + '.pt')
     args = parser.parse_args()
 
-    model = MODELS_DICT.get(args.model).cuda()
+    model = get_model(args.model).cuda().eval()
+    criterion = torch.nn.CrossEntropyLoss(reduction='none')
 
     if args.masks:
         dataset = torch.load(args.dataset)
     else:
         images = torch.load(args.dataset)
-        masks = [torch.ones(images[0].size())]*images.__len__()
+        if args.gradient_mask:
+            masks = [get_simba_gradient(model, image, criterion) for image in images]
+        else:
+            masks = [torch.ones(images[0].size())]*images.__len__()
+
         dataset = zip(images, masks)
 
     adversarial_examples_list = []
