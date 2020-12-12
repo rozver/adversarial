@@ -108,7 +108,7 @@ def main():
         dataset = torch.load(args.dataset)
     else:
         images = torch.load(args.dataset)
-        if args.gradient_mask:
+        if args.gradient_masks:
             masks = [get_simba_gradient(model, image, criterion) for image in images]
         else:
             masks = [torch.ones(images[0].size())]*images.__len__()
