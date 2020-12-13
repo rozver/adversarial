@@ -1,9 +1,10 @@
 import torch
 from torch import autograd
-import os
+import numpy as np
 from model_utils import MODELS_LIST, get_model, load_model
 import argparse
 from pgd import get_current_time
+import os
 
 
 def get_prediction(model, image):
@@ -21,6 +22,15 @@ def get_gradient(model, image, label, criterion):
 
     grad = autograd.grad(loss, image)[0]
     return grad.cpu()
+
+
+def get_sorted_order(grad, size):
+    grad = torch.flatten(grad)
+    if not 0 < size < grad.size(0):
+        raise ValueError('Invalid size entered!')
+
+    order = np.argsort(grad.cpu())[:size]
+    return order
 
 
 def get_grad_dict(model, criterion, args):

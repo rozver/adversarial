@@ -3,7 +3,7 @@ from torch.nn.functional import softmax
 from model_utils import MODELS_LIST, get_model
 from pgd import get_current_time
 import argparse
-from gradient_analysis import get_gradient, normalize_grad
+from gradient_analysis import get_gradient, normalize_grad, get_sorted_order
 
 
 def get_simba_gradient(model, image, criterion):
@@ -38,30 +38,30 @@ def simba_pixels(model, x, y, args, g):
     q = torch.zeros(x.size()).cuda()
 
     p = get_probabilities(model, x, y)
-    perm = torch.randperm(x.size(0) * x.size(1) * x.size(2))
+    if args.from_gradients:
+        order = get_sorted_order(g, args.num_iterations)
+    else:
+        order = torch.randperm(x.size(0) * x.size(1) * x.size(2))
 
-    for iteration, pixel in enumerate(perm):
+    for iteration, pixel in enumerate(order):
         if iteration == args.num_iterations:
             break
 
         c, w, h = get_tensor_pixel_indices(pixel, x.size())
 
-        if g[c, w, h] != 0:
-            q[c, w, h] = g[c, w, h]
+        p_prim_left = get_probabilities(model, (x + delta + args.eps * q).clamp(0, 1), y)
 
-            p_prim_left = get_probabilities(model, (x + delta + args.eps * q).clamp(0, 1), y)
+        if p_prim_left < p:
+            delta = delta + args.eps * q
+            p = p_prim_left
 
-            if p_prim_left < p:
+        else:
+            p_prim_right = get_probabilities(model, (x + delta - args.eps * q).clamp(0, 1), y)
+            if p_prim_right < p:
                 delta = delta + args.eps * q
                 p = p_prim_left
 
-            else:
-                p_prim_right = get_probabilities(model, (x + delta - args.eps * q).clamp(0, 1), y)
-                if p_prim_right < p:
-                    delta = delta + args.eps * q
-                    p = p_prim_left
-
-            q[c, w, h] = 0
+        q[c, w, h] = 0
 
     return delta
 
