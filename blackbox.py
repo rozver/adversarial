@@ -101,7 +101,7 @@ def main():
     parser.add_argument('--save_file_name', type=str, default='results/blackbox/' + time + '.pt')
     args = parser.parse_args()
 
-    model = get_model(args.model).cuda().eval()
+    model = get_model(args.model, pretrained=True).cuda().eval()
     criterion = torch.nn.CrossEntropyLoss(reduction='none')
 
     if args.masks:
