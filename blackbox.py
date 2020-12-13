@@ -46,8 +46,8 @@ def simba_pixels(model, x, y, args, g):
     for iteration, pixel in enumerate(order):
         if iteration == args.num_iterations:
             break
-
         c, w, h = get_tensor_pixel_indices(pixel, x.size())
+        q[c, w, h] = 1
 
         p_prim_left = get_probabilities(model, (x + delta + args.eps * q).clamp(0, 1), y)
 
