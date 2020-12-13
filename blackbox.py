@@ -38,7 +38,7 @@ def simba_pixels(model, x, y, args, g):
     q = torch.zeros(x.size()).cuda()
 
     p = get_probabilities(model, x, y)
-    if args.from_gradients:
+    if args.gradient_masks:
         order = get_sorted_order(g, args.num_iterations)
     else:
         order = torch.randperm(x.size(0) * x.size(1) * x.size(2))
