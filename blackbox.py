@@ -127,7 +127,7 @@ def main():
 
         if args.gradient_masks:
             label_grad = torch.argmax(model_grad(image.cpu().unsqueeze(0)))
-            mask = get_gradient(model_grad, image, label_grad, criterion)
+            mask = get_gradient(model_grad.cpu(), image.cpu(), label_grad.cpu(), criterion)
 
         if args.attack_type == 'nes':
             grad = nes_gradient(model, image.cuda(), label, args.eps, args.num_iterations)
