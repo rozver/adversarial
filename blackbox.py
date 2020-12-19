@@ -5,7 +5,6 @@ from pgd import get_current_time
 import argparse
 from gradient_analysis import get_gradient, normalize_grad, get_sorted_order
 
-
 def get_simba_gradient(model, image, criterion):
     prediction = model(image.unsqueeze(0).cuda())
     label = torch.argmax(prediction).unsqueeze(0)
@@ -38,6 +37,7 @@ def simba_pixels(model, x, y, args, g):
     q = torch.zeros(x.size()).cuda()
 
     p = get_probabilities(model, x, y)
+
     if args.gradient_masks:
         order = get_sorted_order(g, args.num_iterations)
     else:
@@ -117,11 +117,17 @@ def main():
 
     adversarial_examples_list = []
     predictions_list = []
+    model_grad = get_model('resnet50', True).eval()
+    criterion = torch.nn.CrossEntropyLoss(reduction='none')
 
     for image, mask in dataset:
         with torch.no_grad():
             original_prediction = model(image.cuda().unsqueeze(0))
         label = torch.argmax(original_prediction)
+
+        if args.gradient_masks:
+            label_grad = torch.argmax(model_grad(image.cpu().unsqueeze(0)))
+            mask = get_gradient(model_grad, image, label_grad, criterion)
 
         if args.attack_type == 'nes':
             grad = nes_gradient(model, image.cuda(), label, args.eps, args.num_iterations)
