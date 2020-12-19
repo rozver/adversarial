@@ -117,7 +117,7 @@ def main():
 
     adversarial_examples_list = []
     predictions_list = []
-    model_grad = get_model('resnet50', True).eval()
+    model_grad = get_model('resnet50', True).cuda().eval()
     criterion = torch.nn.CrossEntropyLoss(reduction='none')
 
     for image, mask in dataset:
@@ -126,8 +126,8 @@ def main():
         label = torch.argmax(original_prediction)
 
         if args.gradient_masks:
-            label_grad = torch.argmax(model_grad(image.cpu().unsqueeze(0)))
-            mask = get_gradient(model_grad.cpu(), image.cpu(), label_grad.cpu(), criterion)
+            label_grad = torch.argmax(model_grad(image.cuda().unsqueeze(0)))
+            mask = get_gradient(model_grad, image.cuda(), label_grad, criterion)
 
         if args.attack_type == 'nes':
             grad = nes_gradient(model, image.cuda(), label, args.eps, args.num_iterations)
