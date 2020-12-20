@@ -1,6 +1,5 @@
 import torch
 from torch import autograd
-import numpy as np
 from model_utils import MODELS_LIST, get_model, load_model
 import argparse
 from pgd import get_current_time
@@ -29,7 +28,7 @@ def get_sorted_order(grad, size):
     if not 0 < size < grad.size(0):
         raise ValueError('Invalid size entered!')
 
-    order = np.flip(np.argsort(grad.cpu()))[:size]
+    order = torch.argsort(grad.cpu(), descending=True)[:size]
     return order
 
 
