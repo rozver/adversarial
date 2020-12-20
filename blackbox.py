@@ -97,6 +97,7 @@ def main():
     parser.add_argument('--masks', default=False, action='store_true')
     parser.add_argument('--gradient_masks', default=False, action='store_true')
     parser.add_argument('--attack_type', type=str, choices=['nes', 'simba'], default='simba')
+    parser.add_argument('--gradient_model', type=str, choices=MODELS_LIST, default='inception')
     parser.add_argument('--eps', type=float, default=10)
     parser.add_argument('--num_iterations', type=int, default=1)
     parser.add_argument('--save_file_name', type=str, default='results/blackbox/' + time + '.pt')
@@ -118,7 +119,7 @@ def main():
 
     adversarial_examples_list = []
     predictions_list = []
-    model_grad = get_model('resnet50', True).cuda().eval()
+    model_grad = get_model(args.gradient_model, True).cuda().eval()
     criterion = torch.nn.CrossEntropyLoss(reduction='none')
 
     for image, mask in dataset:
