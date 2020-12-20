@@ -25,11 +25,11 @@ def shuffle_dataset(images, labels):
     return images, labels
 
 
-def create_data_loaders(images, labels, shuffle=True):
+def create_data_loaders(images, labels, batch_size=10, num_workers=4, shuffle=True):
     if shuffle:
         images, labels = shuffle_dataset(images, labels)
-    images_loader = torch.utils.data.DataLoader(images, batch_size=10, num_workers=4)
-    labels_loader = torch.utils.data.DataLoader(labels, batch_size=10, num_workers=4)
+    images_loader = torch.utils.data.DataLoader(images, batch_size=batch_size, num_workers=num_workers)
+    labels_loader = torch.utils.data.DataLoader(labels, batch_size=batch_size, num_workers=num_workers)
     return images_loader, labels_loader
 
 
@@ -117,7 +117,7 @@ class CocoCategoryPreprocessor:
     def export_images_and_masks(self):
         categories_file = open(os.path.join(self.location, 'categories_list.txt'))
         file_read = categories_file.read()
-        if '\'{}\''.format(self.category) in file_read:
+        if '{}'.format(self.category) in file_read:
             category_directory = os.path.join(self.location, self.category)
             if not os.path.exists(category_directory):
                 os.mkdir(category_directory)
@@ -173,4 +173,5 @@ class CocoCategoryPreprocessor:
 
     def run(self):
         self.export_images_and_masks()
+        self.set_dataset()
         self.serialize()

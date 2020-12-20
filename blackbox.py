@@ -1,10 +1,17 @@
 import torch
 from torch.nn.functional import softmax
-from model_utils import get_models_dict
+from model_utils import MODELS_LIST, get_model
 from pgd import get_current_time
 import argparse
+from gradient_analysis import get_gradient, normalize_grad, get_sorted_order
 
-MODELS_DICT = get_models_dict()
+
+def get_simba_gradient(model, image, criterion):
+    prediction = model(image.unsqueeze(0).cuda())
+    label = torch.argmax(prediction).unsqueeze(0)
+    grad = get_gradient(model, image, label, criterion)
+    grad_normalized = normalize_grad(grad)
+    return grad_normalized
 
 
 def get_probabilities(model, x, y):
@@ -31,30 +38,31 @@ def simba_pixels(model, x, y, args, g):
     q = torch.zeros(x.size()).cuda()
 
     p = get_probabilities(model, x, y)
-    perm = torch.randperm(x.size(0) * x.size(1) * x.size(2))
 
-    for iteration, pixel in enumerate(perm):
+    if args.gradient_masks:
+        order = get_sorted_order(g, args.num_iterations)
+    else:
+        order = torch.randperm(x.size(0) * x.size(1) * x.size(2))
+
+    for iteration, pixel in enumerate(order):
         if iteration == args.num_iterations:
             break
-
         c, w, h = get_tensor_pixel_indices(pixel, x.size())
+        q[c, w, h] = 1
 
-        if g[c, w, h] != 0:
-            q[c, w, h] = g[c, w, h]
+        p_prim_left = get_probabilities(model, (x + delta + args.eps * q).clamp(0, 1), y)
 
-            p_prim_left = get_probabilities(model, (x + delta + args.eps * q).clamp(0, 1), y)
+        if p_prim_left < p:
+            delta = delta + args.eps * q
+            p = p_prim_left
 
-            if p_prim_left < p:
+        else:
+            p_prim_right = get_probabilities(model, (x + delta - args.eps * q).clamp(0, 1), y)
+            if p_prim_right < p:
                 delta = delta + args.eps * q
                 p = p_prim_left
 
-            else:
-                p_prim_right = get_probabilities(model, (x + delta - args.eps * q).clamp(0, 1), y)
-                if p_prim_right < p:
-                    delta = delta + args.eps * q
-                    p = p_prim_left
-
-            q[c, w, h] = 0
+        q[c, w, h] = 0
 
     return delta
 
@@ -84,31 +92,44 @@ def main():
     time = get_current_time()
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model', type=str, choices=MODELS_DICT.keys(), default='resnet50')
+    parser.add_argument('--model', type=str, choices=MODELS_LIST, default='resnet50')
     parser.add_argument('--dataset', type=str, default='dataset/imagenet-airplanes-images.pt')
     parser.add_argument('--masks', default=False, action='store_true')
+    parser.add_argument('--gradient_masks', default=False, action='store_true')
     parser.add_argument('--attack_type', type=str, choices=['nes', 'simba'], default='simba')
+    parser.add_argument('--gradient_model', type=str, choices=MODELS_LIST, default='inception_v3')
     parser.add_argument('--eps', type=float, default=10)
     parser.add_argument('--num_iterations', type=int, default=1)
     parser.add_argument('--save_file_name', type=str, default='results/blackbox/' + time + '.pt')
     args = parser.parse_args()
 
-    model = MODELS_DICT.get(args.model).cuda()
+    model = get_model(args.model, pretrained=True).cuda().eval()
+    criterion = torch.nn.CrossEntropyLoss(reduction='none')
 
     if args.masks:
         dataset = torch.load(args.dataset)
     else:
         images = torch.load(args.dataset)
-        masks = [torch.ones(images[0].size())]*images.__len__()
+        if args.gradient_masks:
+            masks = [get_simba_gradient(model, image, criterion) for image in images]
+        else:
+            masks = [torch.ones(images[0].size())]*images.__len__()
+
         dataset = zip(images, masks)
 
     adversarial_examples_list = []
     predictions_list = []
+    model_grad = get_model(args.gradient_model, True).cuda().eval()
+    criterion = torch.nn.CrossEntropyLoss(reduction='none')
 
     for image, mask in dataset:
         with torch.no_grad():
             original_prediction = model(image.cuda().unsqueeze(0))
         label = torch.argmax(original_prediction)
+
+        if args.gradient_masks:
+            label_grad = torch.argmax(model_grad(image.cuda().unsqueeze(0))).unsqueeze(0)
+            mask = get_gradient(model_grad, image.cuda(), label_grad, criterion)
 
         if args.attack_type == 'nes':
             grad = nes_gradient(model, image.cuda(), label, args.eps, args.num_iterations)

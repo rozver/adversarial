@@ -1,8 +1,8 @@
 import torch
-from pgd import Attacker, MODELS_DICT
+from pgd import Attacker
 import argparse
-from dataset_utils import create_data_loaders
-from model_utils import get_model, load_model_from_state_dict
+from dataset_utils import create_data_loaders, Normalizer
+from model_utils import MODELS_LIST, get_model, load_model
 
 
 class Trainer:
@@ -11,11 +11,12 @@ class Trainer:
                  optimizer=torch.optim.Adam):
 
         if training_args_dict['checkpoint_location'] is not None:
-            self.model = load_model_from_state_dict(location=training_args_dict['checkpoint_location'])
-            training_args_dict['model'] = self.model.name
+            self.model = load_model(location=training_args_dict['checkpoint_location'])
+            training_args_dict['arch'] = self.model.arch
         else:
-            self.model = get_model(model_name=training_args_dict['model'], pretrained=training_args_dict['pretrained'])
+            self.model = get_model(arch=training_args_dict['arch'], pretrained=training_args_dict['pretrained'])
 
+        self.normalize = Normalizer(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         self.training_args_dict = training_args_dict
         self.pgd_args_dict = pgd_args_dict
         self.adversarial = training_args_dict['adversarial']
@@ -34,7 +35,7 @@ class Trainer:
                     images_batch = self.create_adversarial_examples(images_batch, labels_batch)
 
                 self.model = self.model.cuda().train()
-                predictions = self.model(images_batch.cuda())
+                predictions = self.model(self.normalize(images_batch.cuda()))
 
                 self.optimizer.zero_grad()
                 loss = self.criterion(predictions, labels_batch.cuda())
@@ -82,7 +83,7 @@ class Trainer:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model', type=str, choices=MODELS_DICT.keys(), default='resnet50')
+    parser.add_argument('--arch', type=str, choices=MODELS_LIST, default='resnet50')
     parser.add_argument('--pretrained', default=False, action='store_true')
     parser.add_argument('--checkpoint_location', type=str, default=None)
     parser.add_argument('--epochs', type=int, default=10)
@@ -92,7 +93,7 @@ def main():
     args_dict = vars(parser.parse_args())
 
     pgd_args_dict = {
-        'model': args_dict['model'],
+        'arch': args_dict['arch'],
         'dataset': 'dataset/imagenet-airplanes-images.pt',
         'masks': False,
         'eps': 32/255.0,

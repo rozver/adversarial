@@ -3,7 +3,7 @@ import argparse
 import os
 from predict import predict
 from multiple_predictions_serializer import save_dictionary_as_csv
-from model_utils import get_models_dict, get_model
+from model_utils import MODELS_LIST, get_model
 
 
 def get_original_location(image_location):
@@ -59,17 +59,14 @@ def summarize_predictions_scores(csv_location):
 
 
 def main():
+    MODELS_LIST_WITH_ALL = MODELS_LIST.append('all')
     parser = argparse.ArgumentParser()
     parser.add_argument('--csv_location', type=str, required=True)
-    parser.add_argument('--model', type=str, default='all')
+    parser.add_argument('--model', type=str, choices=MODELS_LIST_WITH_ALL, default='all')
     args = parser.parse_args()
 
     if os.path.exists(args.csv_location) and args.csv_location.endswith('.csv'):
         if args.model != 'all':
-            if args.model not in get_models_dict().keys():
-                print('Model not found, running for resnet50...')
-                args.model = 'resnet50'
-
             model = get_model(args.model)
             score = compare_predictions(args.csv_location, model)
             print('Score for model ' + args.model + ' is ' + str(score))
