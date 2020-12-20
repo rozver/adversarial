@@ -5,6 +5,7 @@ from pgd import get_current_time
 import argparse
 from gradient_analysis import get_gradient, normalize_grad, get_sorted_order
 
+
 def get_simba_gradient(model, image, criterion):
     prediction = model(image.unsqueeze(0).cuda())
     label = torch.argmax(prediction).unsqueeze(0)
