@@ -29,7 +29,7 @@ def get_sorted_order(grad, size):
     if not 0 < size < grad.size(0):
         raise ValueError('Invalid size entered!')
 
-    order = np.argsort(grad.cpu())[::-1][:size]
+    order = np.flip(np.argsort(grad.cpu()))[:size]
     return order
 
 
