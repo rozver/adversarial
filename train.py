@@ -1,8 +1,9 @@
 import torch
 from pgd import Attacker
-import argparse
 from dataset_utils import create_data_loaders, Normalizer
 from model_utils import MODELS_LIST, get_model, load_model
+import argparse
+import os
 
 
 class Trainer:
@@ -84,33 +85,45 @@ class Trainer:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--arch', type=str, choices=MODELS_LIST, default='resnet50')
+    parser.add_argument('--dataset', type=str, default='dataset/imagenet-airplanes.pt')
     parser.add_argument('--pretrained', default=False, action='store_true')
     parser.add_argument('--checkpoint_location', type=str, default=None)
-    parser.add_argument('--epochs', type=int, default=10)
+    parser.add_argument('--epochs', type=int, default=1)
     parser.add_argument('--learning_rate', type=float, default=1e-2)
     parser.add_argument('--adversarial', default=False, action='store_true')
     parser.add_argument('--save_file_name', type=str, default='models/resnet50_robust.pt')
     args_dict = vars(parser.parse_args())
 
-    pgd_args_dict = {
-        'arch': args_dict['arch'],
-        'dataset': 'dataset/imagenet-airplanes-images.pt',
-        'masks': False,
-        'eps': 32/255.0,
-        'norm': 'linf',
-        'step_size': 16/255.0,
-        'num_iterations': 1,
-        'targeted': False,
-        'eot': False,
-        'transfer': False,
-    }
+    if os.path.exists(args_dict['dataset']):
+        dataset_properties = torch.load(args_dict['dataset'])
 
-    images = torch.load('dataset/imagenet-airplanes-images.pt')
-    labels = torch.load('dataset/imagenet-airplanes-labels.pt')
+        pgd_args_dict = {
+            'arch': args_dict['arch'],
+            'dataset': dataset_properties['images'],
+            'masks': False,
+            'eps': 32/255.0,
+            'norm': 'linf',
+            'step_size': 16/255.0,
+            'num_iterations': 1,
+            'targeted': False,
+            'eot': False,
+            'transfer': False,
+        }
 
-    trainer = Trainer(args_dict, pgd_args_dict)
-    trainer.fit(images, labels)
-    trainer.serialize()
+        images = torch.load(dataset_properties['images'])
+
+        if dataset_properties['labels'] is None:
+            eval_model = get_model(arch=args_dict['arch'], pretrained=True)
+            normalize = Normalizer(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            labels = [torch.argmax(eval_model(normalize(x.unsqueeze(0)))) for x in images]
+        else:
+            labels = torch.load(dataset_properties['labels'])
+
+        trainer = Trainer(args_dict, pgd_args_dict)
+        trainer.fit(images, labels)
+        trainer.serialize()
+    else:
+        raise ValueError('Specified dataset location is incorrect!')
 
 
 if __name__ == '__main__':
