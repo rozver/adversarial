@@ -139,7 +139,7 @@ def main():
             mask = get_gradient(model_grad, image.cuda(), label_grad, criterion)
 
         if args_dict['attack_type'] == 'nes':
-            grad = nes_gradient(model, image.cuda(), label, args_dict['eps'], args_dict)
+            grad = nes_gradient(model, image.cuda(), label, args_dict)
             adversarial_example = fgsm_grad(image.cuda(), grad, args_dict['eps'])
         else:
             delta = simba_pixels(model, image.cuda(), label.cuda(), args_dict, mask.cuda())
