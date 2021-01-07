@@ -40,6 +40,16 @@ def get_transformation(transformation_type):
         raise ValueError
 
 
+def get_random_transformation():
+    transformation_types_list = ['rotation', 'noise', 'light', 'translation']
+    transformation_type = random.choice(transformation_types_list)
+
+    t = get_transformation(transformation_type)
+    t.set_random_parameter()
+
+    return t
+
+
 class Transformation:
     def __init__(self, transformation_type):
         if transformation_type not in get_transformation_bounds_dict():

@@ -1,6 +1,7 @@
 import torch
 from torch import autograd
 from model_utils import MODELS_LIST, get_model, load_model
+from file_utils import validate_save_file_location
 import argparse
 from pgd import get_current_time
 import os
@@ -32,13 +33,13 @@ def get_sorted_order(grad, size):
     return order
 
 
-def get_grad_dict(model, criterion, args):
+def get_grad_dict(model, criterion, args_dict):
     grads_dict = {}
 
-    for category_file in os.listdir(args.dataset):
+    for category_file in os.listdir(args_dict['dataset']):
         category_grads = []
         if category_file.endswith('.pt'):
-            dataset = torch.load(os.path.join(args.dataset, category_file))
+            dataset = torch.load(os.path.join(args_dict['dataset'], category_file))
 
             if dataset.__len__() == 0:
                 continue
@@ -105,22 +106,22 @@ def get_category_average(grads, dataset):
     return foreground_average.cpu(), background_average.cpu()
 
 
-def get_averages_by_category(grads_dict, args):
+def get_averages_by_category(grads_dict, args_dict):
     categories_averages = {}
     for category in grads_dict.keys():
-        category_dataset = torch.load(os.path.join(args.dataset, category+'.pt'))
+        category_dataset = torch.load(os.path.join(args_dict['dataset'], category+'.pt'))
         foreground_average, background_average = get_category_average(grads_dict[category], category_dataset)
         categories_averages[category] = [foreground_average, background_average]
     return categories_averages
 
 
-def get_averages_dict(model, criterion, args):
+def get_averages_dict(model, criterion, args_dict):
     averages_dict = {}
 
-    for category_file in os.listdir(args.dataset):
+    for category_file in os.listdir(args_dict['dataset']):
         category_grads = []
         if category_file.endswith('.pt'):
-            dataset = torch.load(os.path.join(args.dataset, category_file))
+            dataset = torch.load(os.path.join(args_dict['dataset'], category_file))
 
             if dataset.__len__() == 0:
                 continue
@@ -129,7 +130,7 @@ def get_averages_dict(model, criterion, args):
                 label = torch.argmax(prediction, dim=1).cuda()
 
                 current_grad = get_gradient(model, image, label, criterion)
-                if args.normalize_grads:
+                if args_dict['normalize_grads']:
                     current_grad = normalize_grad(current_grad)
                 category_grads.append(current_grad.cpu())
 
@@ -149,21 +150,23 @@ def main():
     parser.add_argument('--from_robustness', default=False, action='store_true')
     parser.add_argument('--dataset', type=str, default='dataset/coco')
     parser.add_argument('--normalize_grads', default=False, action='store_true')
-    parser.add_argument('--save_file_name', type=str, default='results/gradient/' + time + '.pt')
-    args = parser.parse_args()
+    parser.add_argument('--save_file_location', type=str, default='results/gradient/' + time + '.pt')
+    args_dict = vars(parser.parse_args())
 
-    if args.checkpoint_location is not None:
-        model = load_model(location=args.checkpoint_location,
-                           arch=args.arch,
-                           from_robustness=args.from_robustness).cuda().eval()
+    validate_save_file_location(args_dict['save_file_location'])
+
+    if args_dict['checkpoint_location'] is not None:
+        model = load_model(location=args_dict['checkpoint_location'],
+                           arch=args_dict['arch'],
+                           from_robustness=args_dict['from_robustness']).cuda().eval()
     else:
-        model = get_model(args.arch, args.pretrained).cuda().eval()
+        model = get_model(args_dict['arch'], args_dict['pretrained']).cuda().eval()
 
     criterion = torch.nn.CrossEntropyLoss(reduction='none')
 
-    averages = get_averages_dict(model, criterion, args)
-    torch.save({'averages': averages, 'args': args},
-               args.save_file_name)
+    averages = get_averages_dict(model, criterion, args_dict)
+    torch.save({'averages': averages, 'args': args_dict},
+               args_dict['save_file_location'])
 
 
 if __name__ == '__main__':

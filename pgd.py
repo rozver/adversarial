@@ -1,26 +1,11 @@
 import torch
 from pgd_attack_steps import LinfStep, L2Step
-import random
 from model_utils import get_model, MODELS_LIST
-from transformations import get_transformation
+from transformations import get_random_transformation
+from file_utils import get_current_time, validate_save_file_location
 import argparse
-import datetime
 
 TARGET_CLASS = 934
-
-
-def get_current_time():
-    return str(datetime.datetime.now().strftime('%d-%m-%Y_%H:%M:%S'))
-
-
-def get_random_transformation():
-    transformation_types_list = ['rotation', 'noise', 'light', 'translation']
-    transformation_type = random.choice(transformation_types_list)
-
-    t = get_transformation(transformation_type)
-    t.set_random_parameter()
-
-    return t
 
 
 class Attacker:
@@ -141,10 +126,12 @@ def main():
     parser.add_argument('--targeted', default=False, action='store_true')
     parser.add_argument('--eot', default=False, action='store_true')
     parser.add_argument('--transfer', default=False, action='store_true')
-    parser.add_argument('--save_file_name', type=str, default='results/pgd_new_experiments/pgd-' + time + '.pt')
+    parser.add_argument('--save_file_location', type=str, default='results/pgd_new_experiments/pgd-' + time + '.pt')
     args_ns = parser.parse_args()
 
     args_dict = vars(args_ns)
+
+    validate_save_file_location(args_dict['save_file_location'])
 
     args_dict['eps'], args_dict['step_size'] = args_dict['eps'] / 255.0, args_dict['step_size'] / 255.0
 
@@ -194,7 +181,7 @@ def main():
     torch.save({'adversarial_examples': adversarial_examples_list,
                 'predictions': predictions_list,
                 'args_dict': args_dict},
-               args_dict['save_file_name'])
+               args_dict['save_file_location'])
     print('Finished!\n')
 
 

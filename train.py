@@ -2,6 +2,7 @@ import torch
 from pgd import Attacker
 from dataset_utils import create_data_loaders, Normalizer
 from model_utils import MODELS_LIST, get_model, load_model
+from file_utils import validate_save_file_location
 import argparse
 import os
 
@@ -79,7 +80,7 @@ class Trainer:
                     'training_args': self.training_args_dict,
                     'pgd_args': self.pgd_args_dict,
                     'losses': self.losses},
-                   self.training_args_dict['save_file_name'])
+                   self.training_args_dict['save_file_location'])
 
 
 def main():
@@ -91,8 +92,10 @@ def main():
     parser.add_argument('--epochs', type=int, default=1)
     parser.add_argument('--learning_rate', type=float, default=1e-2)
     parser.add_argument('--adversarial', default=False, action='store_true')
-    parser.add_argument('--save_file_name', type=str, default='models/resnet50_robust.pt')
+    parser.add_argument('--save_file_location', type=str, default='models/resnet50_robust.pt')
     args_dict = vars(parser.parse_args())
+
+    validate_save_file_location(args_dict['save_file_location'])
 
     if os.path.exists(args_dict['dataset']):
         dataset_properties = torch.load(args_dict['dataset'])
