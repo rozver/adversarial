@@ -23,11 +23,11 @@ def save_images(results, results_location, dataset):
         os.makedirs(adversarial_directory)
         os.makedirs(noises_directory)
 
-        if results['args'].masks:
+        if results['args_dict']['masks']:
             os.makedirs(masks_directory)
 
     for index, (original_image, adversarial_example) in enumerate(zip(dataset, results['adversarial_examples'],)):
-        if results['args'].masks:
+        if results['args_dict']['masks']:
             original_image, mask = original_image
             save_image(mask,  (masks_directory + str(index) + '.png'), normalize=True)
 
@@ -42,25 +42,25 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--location', type=str, required=True)
     parser.add_argument('--save_images', default=False, action='store_true')
-    args = parser.parse_args()
+    args_dict = vars(parser.parse_args())
 
     setups_and_results = []
-    files = os.listdir(args.location)
+    files = os.listdir(args_dict['location'])
 
     for file in files:
         if not file.endswith('.pt'):
             continue
 
-        results_location = os.path.join(args.location, file)
+        results_location = os.path.join(args_dict['location'], file)
         results = torch.load(results_location)
         successful_attacks = 0
 
-        if 'args' not in results.keys():
-            print('File ' + results_location + ' does not have dictionary key args')
+        if 'args_dict' not in results.keys():
+            print('File ' + results_location + ' does not have dictionary key args_dict')
             continue
 
-        if 'blackbox' in results['args'].save_file_name:
-            results['args'].masks = False
+        if 'blackbox' in results['args_dict']['save_file_location']:
+            results['args_dict']['masks'] = False
 
         for predictions in results['predictions']:
             original_class = torch.argmax(predictions['original']).item()
@@ -70,15 +70,15 @@ def main():
                 successful_attacks += 1
 
         success_rate = round(successful_attacks/len(results['predictions']), 2)
-        setups_and_results.append(str(results['args']) + '\nAttack success rate: ' +
+        setups_and_results.append(str(results['args_dict']) + '\nAttack success rate: ' +
                                   str(success_rate) +
                                   '\n')
 
-        if args.save_images:
-            dataset = torch.load(results['args'].dataset)
+        if args_dict['save_images']:
+            dataset = torch.load(results['args_dict']['dataset'])
             save_images(results, results_location, dataset)
 
-    with open(os.path.join(args.location, 'setups_and_results.txt'), 'w') as file:
+    with open(os.path.join(args_dict['location'], 'setups_and_results.txt'), 'w') as file:
         for result in setups_and_results:
             file.write(str(result))
             file.write('\n')

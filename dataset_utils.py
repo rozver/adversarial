@@ -72,9 +72,6 @@ class ImageNetPreprocessor:
 
         self.dataset_images = datasets.ImageNet(location=self.location, transform=transform)
 
-    def get_dataset_images(self):
-        return self.dataset_images
-
     def set_labels(self):
         if self.dataset_images is not None:
             normalize = Normalizer(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
@@ -82,20 +79,32 @@ class ImageNetPreprocessor:
         else:
             raise ValueError('Image dataset not set!')
 
-    def get_labels(self):
-        return self.labels
-
     def serialize(self):
-        if self.dataset_images is not None and self.labels:
+        if self.dataset_images is not None:
+            suffix_location = '-grayscale.pt' if not self.rgb else '.pt'
             images = self.dataset_images
-            labels = self.labels
+            images_location = self.location + '-images' + suffix_location
 
-            if self.rgb:
-                torch.save(images, self.location + '-images.pt')
-                torch.save(labels, self.location + '-labels.pt')
+            if self.labels is not None:
+                labels = self.labels
+                labels_location = self.location + '-labels' + suffix_location
             else:
-                torch.save(images, self.location + '-images-grayscale.pt')
-                torch.save(labels, self.location + '-labels-grayscale.pt')
+                labels = None
+                labels_location = None
+
+            properties_location = self.location+suffix_location
+            properties_dict = {
+                'images': images_location,
+                'labels': labels_location,
+                'length': images.__len__()
+            }
+
+            torch.save(properties_dict, properties_location)
+            torch.save(images, images_location)
+
+            if labels is not None:
+                torch.save(labels, labels_location)
+
         else:
             raise ValueError('Images and labels not set!')
 
@@ -160,9 +169,6 @@ class CocoCategoryPreprocessor:
             self.dataset = dataset
         else:
             raise ValueError('Dataset images and masks for the chosen category are not exported!')
-
-    def get_dataset(self):
-        return self.dataset
 
     def serialize(self):
         category_location = os.path.join(self.location, self.category)
