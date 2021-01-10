@@ -13,6 +13,7 @@ MODELS_LIST = [
     'vgg16',
     'vgg19',
     'inception_v3',
+    'mobilenet_v2'
 ]
 
 

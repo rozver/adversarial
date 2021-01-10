@@ -1,9 +1,9 @@
 import os
 import torch
 import argparse
-import torchvision
 from PIL import Image
 from torchvision import transforms
+from model_utils import MODELS_LIST, get_model
 
 
 def predict(x, model, is_tensor=True, use_gpu=False):
@@ -40,15 +40,17 @@ def predict_multiple(images_batch, model, is_tensor=True, use_gpu=False):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    parser.add_argument('--arch', type=str, choices=MODELS_LIST, default='resnet50')
     parser.add_argument('--image', type=str, required=True)
-    args = parser.parse_args()
+    args_dict = vars(parser.parse_args())
 
-    if os.path.exists(args.image):
-        if args.image.endswith(('png', 'jpg', 'jpeg')):
-            model = torchvision.models.resnet50(pretrained=True).eval()
-            predicted_class = torch.argmax(predict(args.image, model, is_tensor=False)).item()
+    if os.path.exists(args_dict['image']):
+        if args_dict['image'].endswith(('png', 'jpg', 'jpeg')):
+            model = get_model(args_dict['arch'], pretrained=True).eval()
+            predicted_class = torch.argmax(predict(args_dict['image'], model, is_tensor=False)).item()
             print(predicted_class)
         else:
             raise ValueError('The entered file is not an image with a format .png, .jpg or .jpeg!')
     else:
         raise ValueError('Incorrect image path!')
+
