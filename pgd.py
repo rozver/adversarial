@@ -61,10 +61,10 @@ class Attacker:
             else:
                 loss = self.loss(x.cpu(), label)
 
-            # x.register_hook(lambda grad: grad * mask.float())
+            x.register_hook(lambda grad: grad * mask.float())
             loss.backward()
 
-            grads = mask*x.grad.detach().clone()
+            grads = x.grad.detach().clone()
             x.grad.zero_()
 
             if best_loss is not None:
