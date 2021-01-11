@@ -4,6 +4,7 @@ from model_utils import get_model, MODELS_LIST
 from transformations import get_random_transformation
 from file_utils import get_current_time, validate_save_file_location
 import argparse
+import time as tm
 
 TARGET_CLASS = 934
 
@@ -60,10 +61,10 @@ class Attacker:
             else:
                 loss = self.loss(x.cpu(), label)
 
-            x.register_hook(lambda grad: grad * mask.float())
+            # x.register_hook(lambda grad: grad * mask.float())
             loss.backward()
 
-            grads = x.grad.detach().clone()
+            grads = mask*x.grad.detach().clone()
             x.grad.zero_()
 
             if best_loss is not None:
@@ -113,7 +114,7 @@ class Attacker:
 
 
 def main():
-    time = get_current_time()
+    time = str(get_current_time())
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--arch', type=str, choices=MODELS_LIST, default='resnet50')
@@ -130,6 +131,7 @@ def main():
     args_ns = parser.parse_args()
 
     args_dict = vars(args_ns)
+    avg_time = 0.0
 
     validate_save_file_location(args_dict['save_file_location'])
 
@@ -159,6 +161,7 @@ def main():
 
     print('Starting PGD...')
     for index, (image, mask) in enumerate(dataset):
+        start_time = tm.time()
         print('Image: ' + str(index+1) + '/' + str(dataset_length))
         original_prediction = model(image.unsqueeze(0))
 
@@ -174,8 +177,13 @@ def main():
         adversarial_examples_list.append(adversarial_example)
         predictions_list.append({'original': original_prediction,
                                  'adversarial': adversarial_prediction})
+        temp_time = float(tm.time() - start_time)
+        print(temp_time)
+        avg_time += temp_time
 
     print('Finished!')
+
+    print('\nAverage time: ' + str(avg_time/dataset.__len__()))
 
     print('Serializing results...')
     torch.save({'adversarial_examples': adversarial_examples_list,
