@@ -43,6 +43,7 @@ class Attacker:
             label[0] = target
 
         x = image.clone().detach().requires_grad_(True)
+
         self.model = self.model.cpu()
         iterations_without_updates = 0
 
@@ -59,12 +60,12 @@ class Attacker:
             else:
                 loss = self.loss(x.cpu(), label)
 
+            x.register_hook(lambda grad: grad * mask.float())
             loss.backward()
 
             grads = x.grad.detach().clone()
+            print(grads[0][0][0])
             x.grad.zero_()
-
-            grads_foreground = grads*mask
 
             if best_loss is not None:
                 if best_loss < loss:
@@ -78,7 +79,7 @@ class Attacker:
 
             iterations_without_updates += 1
 
-            x = step.step(x, grads_foreground)
+            x = step.step(x, grads)
             x = step.project(x)
 
         return best_x.cpu()
