@@ -3,7 +3,7 @@ import os
 
 
 def get_current_time():
-    return str(datetime.datetime.now().strftime('%d-%m-%Y_%H:%M:%S'))
+    return datetime.datetime.now().strftime('%d-%m-%Y_%H:%M:%S')
 
 
 def validate_save_file_location(location):

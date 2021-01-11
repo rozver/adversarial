@@ -4,7 +4,6 @@ from model_utils import get_model, MODELS_LIST
 from transformations import get_random_transformation
 from file_utils import get_current_time, validate_save_file_location
 import argparse
-import time as tm
 
 TARGET_CLASS = 934
 
@@ -177,13 +176,7 @@ def main():
         adversarial_examples_list.append(adversarial_example)
         predictions_list.append({'original': original_prediction,
                                  'adversarial': adversarial_prediction})
-        temp_time = float(tm.time() - start_time)
-        print(temp_time)
-        avg_time += temp_time
-
     print('Finished!')
-
-    print('\nAverage time: ' + str(avg_time/dataset.__len__()))
 
     print('Serializing results...')
     torch.save({'adversarial_examples': adversarial_examples_list,
