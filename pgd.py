@@ -64,7 +64,6 @@ class Attacker:
             loss.backward()
 
             grads = x.grad.detach().clone()
-            print(grads[0][0][0])
             x.grad.zero_()
 
             if best_loss is not None:
