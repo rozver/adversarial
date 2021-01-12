@@ -1,6 +1,6 @@
 import torch
 from pgd_attack_steps import LinfStep, L2Step
-from model_utils import get_model, MODELS_LIST
+from model_utils import MODELS_LIST, get_model, load_model
 from transformations import get_random_transformation
 from file_utils import get_current_time, validate_save_file_location
 import argparse
@@ -117,6 +117,8 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--arch', type=str, choices=MODELS_LIST, default='resnet50')
+    parser.add_argument('--checkpoint_location', type=str, default=None)
+    parser.add_argument('--from_robustness', default=False, action='store_true')
     parser.add_argument('--dataset', type=str, default='dataset/imagenet-airplanes-images.pt')
     parser.add_argument('--masks', default=False, action='store_true')
     parser.add_argument('--eps', type=float, default=8)
@@ -130,7 +132,6 @@ def main():
     args_ns = parser.parse_args()
 
     args_dict = vars(args_ns)
-    avg_time = 0.0
 
     validate_save_file_location(args_dict['save_file_location'])
 
@@ -139,7 +140,12 @@ def main():
     print('Running PGD experiment with the following arguments:')
     print(str(args_dict)+'\n')
 
-    model = get_model(args_dict['arch'], pretrained=True).eval()
+    if args_dict['checkpoint_location'] is None:
+        model = get_model(arch=args_dict['arch'], pretrained=True).eval()
+    else:
+        model = load_model(location=args_dict['checkpoint_location'],
+                           arch=args_dict['arch'],
+                           from_robustness=args_dict['from_robustness']).eval()
 
     attacker = Attacker(model, args_dict)
     target = torch.FloatTensor([TARGET_CLASS])
@@ -160,7 +166,6 @@ def main():
 
     print('Starting PGD...')
     for index, (image, mask) in enumerate(dataset):
-        start_time = tm.time()
         print('Image: ' + str(index+1) + '/' + str(dataset_length))
         original_prediction = model(image.unsqueeze(0))
 
