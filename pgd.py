@@ -156,7 +156,7 @@ def main():
         dataset_length = dataset.__len__()
     else:
         images = torch.load(args_dict['dataset'])
-        masks = [torch.ones(images[0].size())]*images.__len__()
+        masks = [torch.ones_like(images[0])]*images.__len__()
         dataset = zip(images, masks)
         dataset_length = images.__len__()
     print('Finished!\n')
