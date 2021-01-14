@@ -4,6 +4,29 @@ from torchvision.utils import save_image
 import argparse
 from matplotlib import pyplot as plt
 
+ARGS_DICT_KEYS_PGD = ['arch', 'checkpoint_location', 'from_robustness', 'dataset', 'masks', 'eps', 'norm',
+                      'step_size', 'num_iterations', 'targeted', 'eot', 'transfer', 'save_file_location']
+ARGS_DICT_KEYS_BLACKBOX = ['model', 'dataset', 'masks', 'gradient_masks', 'attack_type',
+                           'gradient_model', 'eps', 'num_iterations', 'save_file_location']
+
+
+def has_wrong_args(results, results_location):
+    if 'args_dict' not in results.keys():
+        print('File ' + results_location + ' does not have dictionary key args_dict')
+        return True
+
+    if 'blackbox' in results_location:
+        keys = ARGS_DICT_KEYS_BLACKBOX
+    else:
+        keys = ARGS_DICT_KEYS_PGD
+
+    for key in keys:
+        if key not in results['args_dict'].keys():
+            print('File ' + results_location + ' does not have args dictionary key ' + key)
+            return True
+
+    return False
+
 
 def plot_adversarial_examples(results):
     for image in results['adversarial_examples']:
@@ -12,7 +35,7 @@ def plot_adversarial_examples(results):
 
 
 def save_images(results, results_location, dataset):
-    results_images_folder = os.path.dirname(results_location)+'/images/'+results_location.split('/')[-1][:-3]
+    results_images_folder = os.path.dirname(results_location) + '/images/' + results_location.split('/')[-1][:-3]
     original_directory = results_images_folder + '/original/'
     adversarial_directory = results_images_folder + '/adversarial/'
     noises_directory = results_images_folder + '/noises/'
@@ -26,10 +49,10 @@ def save_images(results, results_location, dataset):
         if results['args_dict']['masks']:
             os.makedirs(masks_directory)
 
-    for index, (original_image, adversarial_example) in enumerate(zip(dataset, results['adversarial_examples'],)):
+    for index, (original_image, adversarial_example) in enumerate(zip(dataset, results['adversarial_examples'], )):
         if results['args_dict']['masks']:
             original_image, mask = original_image
-            save_image(mask,  (masks_directory + str(index) + '.png'), normalize=True)
+            save_image(mask, (masks_directory + str(index) + '.png'), normalize=True)
 
         noise = original_image - adversarial_example
 
@@ -55,8 +78,7 @@ def main():
         results = torch.load(results_location)
         successful_attacks = 0
 
-        if 'args_dict' not in results.keys():
-            print('File ' + results_location + ' does not have dictionary key args_dict')
+        if has_wrong_args(results, results_location):
             continue
 
         if 'blackbox' in results['args_dict']['save_file_location']:
@@ -69,7 +91,7 @@ def main():
             if original_class != adversarial_class:
                 successful_attacks += 1
 
-        success_rate = round(successful_attacks/len(results['predictions']), 2)
+        success_rate = round(successful_attacks / len(results['predictions']), 2)
         setups_and_results.append(str(results['args_dict']) + '\nAttack success rate: ' +
                                   str(success_rate) +
                                   '\n')

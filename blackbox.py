@@ -102,7 +102,7 @@ def main():
     parser.add_argument('--masks', default=False, action='store_true')
     parser.add_argument('--gradient_masks', default=False, action='store_true')
     parser.add_argument('--attack_type', type=str, choices=['nes', 'simba'], default='simba')
-    parser.add_argument('--gradient_model', type=str, choices=MODELS_LIST, default='inception_v3')
+    parser.add_argument('--gradient_model', type=str, choices=MODELS_LIST, default=None)
     parser.add_argument('--eps', type=float, default=10)
     parser.add_argument('--num_iterations', type=int, default=1)
     parser.add_argument('--save_file_location', type=str, default='results/blackbox/' + time + '.pt')
