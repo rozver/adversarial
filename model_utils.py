@@ -154,7 +154,3 @@ def predict(model, image):
     if type(prediction) == tuple:
         return prediction[0]
     return prediction
-
-
-if __name__ == '__main__':
-    print(len(pretrainedmodels.model_names))
