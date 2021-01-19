@@ -5,6 +5,7 @@ from transformations import get_random_transformation
 from file_utils import get_current_time, validate_save_file_location
 from collections import defaultdict
 import argparse
+import random
 
 TARGET_CLASS = 934
 
@@ -14,14 +15,15 @@ class Attacker:
         self.model = model
         self.args_dict = args_dict
 
-        if args_dict['transfer'] or  args_dict['selective_transfer']:
+        if args_dict['transfer'] or args_dict['selective_transfer']:
             self.loss = self.transfer_loss
 
             if args_dict['transfer']:
+                surrogates_list = MODELS_LIST
+                surrogates_list.remove(args_dict['arch'])
+                surrogates_list = random.shuffle(surrogates_list)[:args_dict['num_surrogates']]
                 self.surrogate_models = [get_model(arch, parameters='standard').eval()
-                                         for arch in MODELS_LIST[:args_dict['num_surrogates']]
-                                         if arch != args_dict['arch']
-                                         ]
+                                         for arch in surrogates_list]
         else:
             self.loss = self.normal_loss
 
@@ -101,15 +103,17 @@ class Attacker:
             x = image.clone().detach().requires_grad_(True)
             x = step.random_perturb(x, mask)
             for arch in MODELS_LIST:
-                current_model = get_model(arch, 'standard', 'pretrainedmodels')
+                current_model = get_model(arch, 'standard')
                 prediction = predict(current_model, x)
                 current_loss = self.criterion(prediction, label).item()
                 model_scores[arch] += current_loss
 
-        model_scores_sorted = sorted(model_scores.values(), key=lambda x: x[1])
+        model_scores_sorted = sorted([key for (key, value) in model_scores.items()])
+
+        model_scores_sorted.remove(self.args_dict['arch'])
+        surrogates_list = model_scores_sorted[:self.args_dict['num_surrogates']]
         surrogate_models = [get_model(arch, parameters='standard').eval()
-                            for arch in model_scores_sorted[:self.args_dict['num_surrogates']]
-                            if arch != self.args_dict['arch']]
+                            for arch in surrogates_list]
         return surrogate_models
 
     def normal_loss(self, x, label):
@@ -158,7 +162,7 @@ def main():
     parser.add_argument('--eot', default=False, action='store_true')
     parser.add_argument('--transfer', default=False, action='store_true')
     parser.add_argument('--selective_transfer', default=False, action='store_true')
-    parser.add_argument('--num_surrogates', type=int, default=1)
+    parser.add_argument('--num_surrogates', type=int, choices=(0, len(MODELS_LIST)-1), default=1)
     parser.add_argument('--save_file_location', type=str, default='results/pgd_new_experiments/pgd-' + time + '.pt')
     args_ns = parser.parse_args()
 
