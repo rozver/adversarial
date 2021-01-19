@@ -1,8 +1,9 @@
 import torch
 from pgd_attack_steps import LinfStep, L2Step
-from model_utils import MODELS_LIST, get_model, load_model
+from model_utils import MODELS_LIST, get_model, load_model, predict
 from transformations import get_random_transformation
 from file_utils import get_current_time, validate_save_file_location
+from collections import defaultdict
 import argparse
 
 TARGET_CLASS = 934
@@ -13,12 +14,14 @@ class Attacker:
         self.model = model
         self.args_dict = args_dict
 
-        if args_dict['transfer']:
+        if args_dict['transfer'] or  args_dict['selective_transfer']:
             self.loss = self.transfer_loss
-            self.surrogate_models = [get_model(arch, pretrained=True).eval()
-                                     for arch in MODELS_LIST
-                                     if arch != args_dict['arch']
-                                     ]
+
+            if args_dict['transfer']:
+                self.surrogate_models = [get_model(arch, parameters='standard').eval()
+                                         for arch in MODELS_LIST[:args_dict['num_surrogates']]
+                                         if arch != args_dict['arch']
+                                         ]
         else:
             self.loss = self.normal_loss
 
@@ -43,6 +46,12 @@ class Attacker:
             label[0] = target
 
         x = image.clone().detach().requires_grad_(True)
+
+        if self.args_dict['selective_transfer']:
+            self.surrogate_models = self.selective_transfer(image.cpu(),
+                                                            mask.cpu(),
+                                                            step,
+                                                            self.args_dict['num_iterations']//10+1)
 
         self.model = self.model.cpu()
         iterations_without_updates = 0
@@ -82,6 +91,26 @@ class Attacker:
             x = step.project(x)
 
         return best_x.cpu()
+
+    def selective_transfer(self, image, mask, step, num_queries):
+        model_scores = {}
+        model_scores = defaultdict(lambda: 0, model_scores)
+
+        label = torch.argmax(predict(self.model, image)).unsqueeze(0)
+        for iteration in range(num_queries):
+            x = image.clone().detach().requires_grad_(True)
+            x = step.random_perturb(x, mask)
+            for arch in MODELS_LIST:
+                current_model = get_model(arch, 'standard', 'pretrainedmodels')
+                prediction = predict(current_model, x)
+                current_loss = self.criterion(prediction, label).item()
+                model_scores[arch] += current_loss
+
+        model_scores_sorted = sorted(model_scores.values(), key=lambda x: x[1])
+        surrogate_models = [get_model(arch, parameters='standard').eval()
+                            for arch in model_scores_sorted[:self.args_dict['num_surrogates']]
+                            if arch != self.args_dict['arch']]
+        return surrogate_models
 
     def normal_loss(self, x, label):
         prediction = self.model(x.unsqueeze(0))
@@ -128,6 +157,8 @@ def main():
     parser.add_argument('--targeted', default=False, action='store_true')
     parser.add_argument('--eot', default=False, action='store_true')
     parser.add_argument('--transfer', default=False, action='store_true')
+    parser.add_argument('--selective_transfer', default=False, action='store_true')
+    parser.add_argument('--num_surrogates', type=int, default=1)
     parser.add_argument('--save_file_location', type=str, default='results/pgd_new_experiments/pgd-' + time + '.pt')
     args_ns = parser.parse_args()
 
@@ -138,10 +169,10 @@ def main():
     args_dict['eps'], args_dict['step_size'] = args_dict['eps'] / 255.0, args_dict['step_size'] / 255.0
 
     print('Running PGD experiment with the following arguments:')
-    print(str(args_dict)+'\n')
+    print(str(args_dict) + '\n')
 
     if args_dict['checkpoint_location'] is None:
-        model = get_model(arch=args_dict['arch'], pretrained=True).eval()
+        model = get_model(arch=args_dict['arch'], parameters='standard').eval()
     else:
         model = load_model(location=args_dict['checkpoint_location'],
                            arch=args_dict['arch'],
@@ -156,7 +187,7 @@ def main():
         dataset_length = dataset.__len__()
     else:
         images = torch.load(args_dict['dataset'])
-        masks = [torch.ones_like(images[0])]*images.__len__()
+        masks = [torch.ones_like(images[0])] * images.__len__()
         dataset = zip(images, masks)
         dataset_length = images.__len__()
     print('Finished!\n')
@@ -166,7 +197,7 @@ def main():
 
     print('Starting PGD...')
     for index, (image, mask) in enumerate(dataset):
-        print('Image: ' + str(index+1) + '/' + str(dataset_length))
+        print('Image: ' + str(index + 1) + '/' + str(dataset_length))
         original_prediction = model(image.unsqueeze(0))
 
         if not args_dict['targeted']:
