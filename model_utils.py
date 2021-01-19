@@ -16,7 +16,6 @@ LOADERS = {
 }
 
 MODELS_LIST = [
-    'resnet34',
     'fbresnet152',
     'bninception',
     'resnext101_32x4d',
@@ -29,6 +28,7 @@ MODELS_LIST = [
     'densenet201',
     'densenet161',
     'resnet18',
+    'resnet34',
     'resnet50',
     'resnet101',
     'resnet152',
@@ -60,9 +60,7 @@ MODELS_LIST = [
     'se_resnext101_32x4d',
     'cafferesnet101',
     'pnasnet5large',
-    'polynet',
-    'mobilenet_v2',
-    'inception_v3'
+    'polynet'
 ]
 
 
@@ -86,9 +84,18 @@ def convert_to_robustness(model, state_dict):
     return model, state_dict
 
 
-def get_model(arch, parameters=None, loader_type='torchvision'):
-    if loader_type in LOADERS:
-        loader = LOADERS[loader_type]
+def get_model(arch, parameters=None, loader_type=None):
+    if loader_type in LOADERS or loader_type is None:
+        if loader_type is None:
+            for current_loader_type in LOADERS.keys():
+                loader = LOADERS[current_loader_type]
+                if arch in loader.__dict__.keys():
+                    loader_type = current_loader_type
+                    break
+            if loader_type is None:
+                raise ValueError('Specified model architecture is not supported by loaders!')
+        else:
+            loader = LOADERS[loader_type]
 
         if parameters is None:
             parameters = []
@@ -147,3 +154,7 @@ def predict(model, image):
     if type(prediction) == tuple:
         return prediction[0]
     return prediction
+
+
+if __name__ == '__main__':
+    print(len(pretrainedmodels.model_names))
