@@ -49,10 +49,13 @@ def save_images(results, results_location, dataset):
         if results['args_dict']['masks']:
             os.makedirs(masks_directory)
 
-    for index, (original_image, adversarial_example) in enumerate(zip(dataset, results['adversarial_examples'], )):
+    for index, (original_image, adversarial_example) in enumerate(zip(dataset, results['adversarial_examples'])):
         if results['args_dict']['masks']:
             original_image, mask = original_image
             save_image(mask, (masks_directory + str(index) + '.png'), normalize=True)
+
+        if adversarial_example.size() != original_image.size():
+            continue
 
         noise = original_image - adversarial_example
 
