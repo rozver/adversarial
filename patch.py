@@ -1,6 +1,6 @@
 import torch
 from pgd import Attacker
-from model_utils import MODELS_LIST, get_model, load_model
+from model_utils import ARCHS_LIST, get_model, load_model
 from file_utils import get_current_time, validate_save_file_location
 from matplotlib import pyplot as plt
 import random
@@ -40,86 +40,91 @@ def get_patch_mask(mask):
         counter += 1
 
 
-time = str(get_current_time())
-parser = argparse.ArgumentParser()
-parser.add_argument('--arch', type=str, choices=MODELS_LIST, default='resnet50')
-parser.add_argument('--checkpoint_location', type=str, default=None)
-parser.add_argument('--from_robustness', default=False, action='store_true')
-parser.add_argument('--dataset', type=str, default='dataset/imagenet-airplanes-images.pt')
-parser.add_argument('--masks', default=False, action='store_true')
-parser.add_argument('--eps', type=float, default=8)
-parser.add_argument('--norm', type=str, choices=['l2', 'linf'], default='linf')
-parser.add_argument('--step_size', type=float, default=1)
-parser.add_argument('--num_iterations', type=int, default=10)
-parser.add_argument('--targeted', default=False, action='store_true')
-parser.add_argument('--eot', default=False, action='store_true')
-parser.add_argument('--transfer', default=False, action='store_true')
-parser.add_argument('--save_file_location', type=str, default='results/pgd_new_experiments/pgd-patch-' + time + '.pt')
-args_ns = parser.parse_args()
+def main():
+    time = str(get_current_time())
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--arch', type=str, choices=ARCHS_LIST, default='resnet50')
+    parser.add_argument('--checkpoint_location', type=str, default=None)
+    parser.add_argument('--from_robustness', default=False, action='store_true')
+    parser.add_argument('--dataset', type=str, default='dataset/imagenet-airplanes-images.pt')
+    parser.add_argument('--masks', default=False, action='store_true')
+    parser.add_argument('--eps', type=float, default=8)
+    parser.add_argument('--norm', type=str, choices=['l2', 'linf'], default='linf')
+    parser.add_argument('--step_size', type=float, default=1)
+    parser.add_argument('--num_iterations', type=int, default=10)
+    parser.add_argument('--targeted', default=False, action='store_true')
+    parser.add_argument('--eot', default=False, action='store_true')
+    parser.add_argument('--transfer', default=False, action='store_true')
+    parser.add_argument('--save_file_location', type=str, default='results/pgd_new_experiments/pgd-patch-' + time + '.pt')
+    args_ns = parser.parse_args()
 
-args_dict = vars(args_ns)
+    args_dict = vars(args_ns)
 
-validate_save_file_location(args_dict['save_file_location'])
+    validate_save_file_location(args_dict['save_file_location'])
 
-args_dict['eps'], args_dict['step_size'] = args_dict['eps'] / 255.0, args_dict['step_size'] / 255.0
+    args_dict['eps'], args_dict['step_size'] = args_dict['eps'] / 255.0, args_dict['step_size'] / 255.0
 
-print('Running PGD experiment with the following arguments:')
-print(str(args_dict)+'\n')
+    print('Running PGD experiment with the following arguments:')
+    print(str(args_dict)+'\n')
 
-if args_dict['checkpoint_location'] is None:
-    model = get_model(arch=args_dict['arch'], pretrained=True).eval()
-else:
-    model = load_model(location=args_dict['checkpoint_location'],
-                       arch=args_dict['arch'],
-                       from_robustness=args_dict['from_robustness']).eval()
+    if args_dict['checkpoint_location'] is None:
+        model = get_model(arch=args_dict['arch'], parameters='standard').eval()
+    else:
+        model = load_model(location=args_dict['checkpoint_location'],
+                           arch=args_dict['arch'],
+                           from_robustness=args_dict['from_robustness']).eval()
 
-attacker = Attacker(model, args_dict)
-target = torch.FloatTensor([934])
+    attacker = Attacker(model, args_dict)
+    target = torch.FloatTensor([934])
 
-print('Loading dataset...')
-if args_dict['masks']:
-    dataset = torch.load(args_dict['dataset'])
-    dataset_length = dataset.__len__()
-else:
-    images = torch.load(args_dict['dataset'])
-    masks = [torch.zeros_like(images[0])]*images.__len__()
-    dataset = zip(images, masks)
-    dataset_length = images.__len__()
-print('Finished!\n')
+    print('Loading dataset...')
+    if args_dict['masks']:
+        dataset = torch.load(args_dict['dataset'])
+        dataset_length = dataset.__len__()
+    else:
+        images = torch.load(args_dict['dataset'])
+        masks = [torch.zeros_like(images[0])]*images.__len__()
+        dataset = zip(images, masks)
+        dataset_length = images.__len__()
+    print('Finished!\n')
 
-adversarial_examples_list = []
-predictions_list = []
+    adversarial_examples_list = []
+    predictions_list = []
 
-print('Starting PGD...')
-for index, (image, mask) in enumerate(dataset):
-    print('Image: ' + str(index+1) + '/' + str(dataset_length))
-    original_prediction = model(image.unsqueeze(0))
+    print('Starting PGD...')
+    for index, (image, mask) in enumerate(dataset):
+        print('Image: ' + str(index+1) + '/' + str(dataset_length))
+        original_prediction = model(image.unsqueeze(0))
 
-    if not args_dict['targeted']:
-        target = original_prediction
+        if not args_dict['targeted']:
+            target = original_prediction
 
-    patch_mask = get_patch_mask(mask)
-    patch_mask = torch.cat(3 * [patch_mask]).view(image.size())
+        patch_mask = get_patch_mask(mask)
+        patch_mask = torch.cat(3 * [patch_mask]).view(image.size())
 
-    image = image*flip_values(patch_mask)
+        image = image*flip_values(patch_mask)
 
-    adversarial_example = attacker(image.cuda(), patch_mask.cuda(), target, False)
-    adversarial_prediction = model(adversarial_example.unsqueeze(0))
+        adversarial_example = attacker(image.cuda(), patch_mask.cuda(), target, False)
+        adversarial_prediction = model(adversarial_example.unsqueeze(0))
 
-    plt.imshow(adversarial_example.cpu().permute(1, 2, 0))
-    plt.show()
+        plt.imshow(adversarial_example.cpu().permute(1, 2, 0))
+        plt.show()
 
-    status = 'Success' if (torch.argmax(adversarial_prediction) != torch.argmax(target)) else 'Failure'
-    print('Attack status: ' + status + '\n')
+        status = 'Success' if (torch.argmax(adversarial_prediction) != torch.argmax(target)) else 'Failure'
+        print('Attack status: ' + status + '\n')
 
-    adversarial_examples_list.append(adversarial_example)
-    predictions_list.append({'original': original_prediction,
-                             'adversarial': adversarial_prediction})
-print('Finished!')
+        adversarial_examples_list.append(adversarial_example)
+        predictions_list.append({'original': original_prediction,
+                                 'adversarial': adversarial_prediction})
+    print('Finished!')
 
-print('Serializing results...')
-torch.save({'adversarial_examples': adversarial_examples_list,
-            'predictions': predictions_list,
-            'args_dict': args_dict},
-           args_dict['save_file_location'])
-print('Finished!\n')
+    print('Serializing results...')
+    torch.save({'adversarial_examples': adversarial_examples_list,
+                'predictions': predictions_list,
+                'args_dict': args_dict},
+               args_dict['save_file_location'])
+    print('Finished!\n')
+
+
+if __name__ == '__main__':
+    main()
