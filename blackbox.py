@@ -135,11 +135,7 @@ def main():
         else:
             delta = simba_pixels(model, image.cuda(), label.cuda(), args_dict, mask.cuda())
             adversarial_example = (image.cuda() + delta).clamp(0, 1)
-            if index == 9 or index == 12:
-                save_image(adversarial_example.cpu(), str(index)+'-normal.png')
-                if index == 12:
-                    sys.exit(0)
-
+            
         with torch.no_grad():
             adversarial_prediction = model(adversarial_example.unsqueeze(0))
 
