@@ -1,6 +1,6 @@
 import torch
 from pgd_attack_steps import LinfStep, L2Step
-from model_utils import MODELS_LIST, get_model, load_model, predict
+from model_utils import ARCHS_LIST, get_model, load_model, predict
 from transformations import get_random_transformation
 from file_utils import get_current_time, validate_save_file_location
 from collections import defaultdict
@@ -19,7 +19,7 @@ class Attacker:
             self.loss = self.transfer_loss
 
             if args_dict['transfer']:
-                surrogates_list = MODELS_LIST
+                surrogates_list = ARCHS_LIST
                 surrogates_list.remove(args_dict['arch'])
                 surrogates_list = random.shuffle(surrogates_list)[:args_dict['num_surrogates']]
                 self.surrogate_models = [get_model(arch, parameters='standard').eval()
@@ -102,7 +102,7 @@ class Attacker:
         for iteration in range(num_queries):
             x = image.clone().detach().requires_grad_(True)
             x = step.random_perturb(x, mask)
-            for arch in MODELS_LIST:
+            for arch in ARCHS_LIST:
                 current_model = get_model(arch, 'standard')
                 prediction = predict(current_model, x)
                 current_loss = self.criterion(prediction, label).item()
@@ -149,7 +149,7 @@ def main():
     time = str(get_current_time())
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--arch', type=str, choices=MODELS_LIST, default='resnet50')
+    parser.add_argument('--arch', type=str, choices=ARCHS_LIST, default='resnet50')
     parser.add_argument('--checkpoint_location', type=str, default=None)
     parser.add_argument('--from_robustness', default=False, action='store_true')
     parser.add_argument('--dataset', type=str, default='dataset/imagenet-airplanes-images.pt')
@@ -162,7 +162,7 @@ def main():
     parser.add_argument('--eot', default=False, action='store_true')
     parser.add_argument('--transfer', default=False, action='store_true')
     parser.add_argument('--selective_transfer', default=False, action='store_true')
-    parser.add_argument('--num_surrogates', type=int, choices=(0, len(MODELS_LIST)-1), default=1)
+    parser.add_argument('--num_surrogates', type=int, choices=(0, len(ARCHS_LIST)-1), default=1)
     parser.add_argument('--save_file_location', type=str, default='results/pgd_new_experiments/pgd-' + time + '.pt')
     args_ns = parser.parse_args()
 
