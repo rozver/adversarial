@@ -11,30 +11,33 @@ STANDARD_PARAMETERS = {
 }
 
 LOADERS = {
-    'pretrainedmodels': pretrainedmodels.models,
     'torchvision': torchvision.models,
+    'pretrainedmodels': pretrainedmodels.models,
 }
 
-MODELS_LIST = [
+TORCHVISION_ARCHS = [
+    'mobilenet_v2',
+    'shufflenet_v2_x0_5',
+    'squeezenet1_1',
+    'mnasnet1_0',
+    'googlenet',
+    'resnet18',
+    'resnet34',
+    'resnet50',
+    'resnet101',
+    'resnet152'
+]
+
+PRETRAINEDMODELS_ARCHS = [
     'fbresnet152',
     'bninception',
     'resnext101_32x4d',
     'resnext101_64x4d',
-    'inceptionv4',
-    'inceptionresnetv2',
     'alexnet',
     'densenet121',
     'densenet169',
     'densenet201',
     'densenet161',
-    'resnet18',
-    'resnet34',
-    'resnet50',
-    'resnet101',
-    'resnet152',
-    'inceptionv3',
-    'squeezenet1_0',
-    'squeezenet1_1',
     'vgg11',
     'vgg11_bn',
     'vgg13',
@@ -44,7 +47,6 @@ MODELS_LIST = [
     'vgg19_bn',
     'vgg19',
     'nasnetamobile',
-    'nasnetalarge',
     'dpn68',
     'dpn68b',
     'dpn92',
@@ -58,23 +60,38 @@ MODELS_LIST = [
     'se_resnet152',
     'se_resnext50_32x4d',
     'se_resnext101_32x4d',
-    'cafferesnet101',
+    'cafferesnet101'
+]
+
+OTHER_MODELS = [
+    'inception_v4',
+    'inceptionresnetv2',
+    'inceptionv3',
+    'squeezenet1_0',
+    'nasnetalarge',
     'pnasnet5large',
     'polynet'
 ]
 
+ARCHS_LIST = TORCHVISION_ARCHS + PRETRAINEDMODELS_ARCHS
+
+
+def get_archs_dict():
+    torchvision_models_dict = dict.fromkeys(TORCHVISION_ARCHS, 'torchvision')
+    pretrainedmodels_dict = dict.fromkeys(PRETRAINEDMODELS_ARCHS, 'pretrainedmodels')
+    archs_dict = {**torchvision_models_dict, **pretrainedmodels_dict}
+    return archs_dict
+
 
 def download_models():
-    for arch in MODELS_LIST:
+    for arch in ARCHS_LIST:
         if not os.path.exists('models/transfer_archs/' + arch + '.pt'):
-            for loader_type in LOADERS.keys():
-                loader = LOADERS[loader_type]
-                if arch in loader.__dict__.keys():
-                    try:
-                        model = get_model(arch, 'standard', loader_type)
-                        break
-                    except EOFError:
-                        break
+            if arch in ARCHS_LIST:
+                try:
+                    model = get_model(arch, 'standard')
+                    print('Model ' + arch + ' successfully downloaded!')
+                except EOFError:
+                    continue
 
 
 def convert_to_robustness(model, state_dict):
@@ -84,40 +101,30 @@ def convert_to_robustness(model, state_dict):
     return model, state_dict
 
 
-def get_model(arch, parameters=None, loader_type=None):
-    if loader_type in LOADERS or loader_type is None:
-        if loader_type is None:
-            for current_loader_type in LOADERS.keys():
-                loader = LOADERS[current_loader_type]
-                if arch in loader.__dict__.keys():
-                    loader_type = current_loader_type
-                    break
-            if loader_type is None:
-                raise ValueError('Specified model architecture is not supported by loaders!')
-        else:
-            loader = LOADERS[loader_type]
+def get_model(arch, parameters=None):
+    if arch in ARCHS_LIST:
+        archs_dict = get_archs_dict()
+        loader = LOADERS[archs_dict[arch]]
 
         if parameters is None:
             parameters = []
         elif parameters == 'standard':
-            parameters = STANDARD_PARAMETERS[loader_type]
-
+            parameters = STANDARD_PARAMETERS[archs_dict[arch]]
         if type(parameters) == list:
-            if arch in MODELS_LIST:
+            if len(parameters) == 2 and parameters[1] in pretrainedmodels.pretrained_settings[arch]:
                 model = loader.__dict__[arch](*parameters)
-                model.arch = arch
-                return model
             else:
-                raise ValueError('Specified model is not in the list of available ones!')
+                model = loader.__dict__[arch](*parameters[:1])
+            model.arch = arch
+            return model
         else:
             raise ValueError('Incorrect model parameters format - has to be a list!')
     else:
-        raise ValueError('Invalid package for model loading specified!')
+        raise ValueError('Specified model is not in the list of available ones!')
 
 
 def get_state_dict(location):
     obj = torch.load(location)
-
     if type(obj) == dict:
         if 'state_dict' or 'model' in obj.keys():
             state_dict_key = 'state_dict' if 'state_dict' in obj.keys() else 'model'
@@ -129,14 +136,13 @@ def get_state_dict(location):
         return obj
 
 
-def load_model(location, arch=None, from_robustness=False, loader_type='torchvision'):
+def load_model(location, arch=None, from_robustness=False):
     if os.path.exists(location):
         if from_robustness:
             if arch is None:
                 raise ValueError('Please, specify model architecture name when loading with robustness')
             model, state_dict = convert_to_robustness(get_model('resnet50',
-                                                                parameters=None,
-                                                                loader_type=loader_type),
+                                                                parameters=None),
                                                       get_state_dict(location))
             model.load_state_dict(state_dict)
             return model
