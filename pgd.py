@@ -8,20 +8,25 @@ import argparse
 import random
 
 TARGET_CLASS = 934
+SURROGATES_LIST_ALL = []
 
 
 class Attacker:
     def __init__(self, model, args_dict, attack_step=LinfStep, masks_batch=None):
         self.model = model
         self.args_dict = args_dict
+        self.surrogates_list = []
 
         if args_dict['transfer'] or args_dict['selective_transfer']:
             self.loss = self.transfer_loss
+            self.available_surrogates_list = ARCHS_LIST
+            self.available_surrogates_list.remove(args_dict['arch'])
 
             if args_dict['transfer']:
                 surrogates_list = ARCHS_LIST
                 surrogates_list.remove(args_dict['arch'])
                 surrogates_list = random.shuffle(surrogates_list)[:args_dict['num_surrogates']]
+                SURROGATES_LIST_ALL.append(surrogates_list)
                 self.surrogate_models = [get_model(arch, parameters='standard').eval()
                                          for arch in surrogates_list]
         else:
@@ -102,16 +107,17 @@ class Attacker:
         for iteration in range(num_queries):
             x = image.clone().detach().requires_grad_(True)
             x = step.random_perturb(x, mask)
-            for arch in ARCHS_LIST:
-                current_model = get_model(arch, 'standard')
+            for arch in self.available_surrogates_list:
+                current_model = get_model(arch, 'standard').eval()
                 prediction = predict(current_model, x)
                 current_loss = self.criterion(prediction, label).item()
                 model_scores[arch] += current_loss
 
-        model_scores_sorted = sorted([key for (key, value) in model_scores.items()])
+        surrogates_list = [arch
+                           for arch in sorted(model_scores, key=model_scores.get, reverse=True)
+                           [:self.args_dict['num_surrogates']]]
+        SURROGATES_LIST_ALL.append(surrogates_list)
 
-        model_scores_sorted.remove(self.args_dict['arch'])
-        surrogates_list = model_scores_sorted[:self.args_dict['num_surrogates']]
         surrogate_models = [get_model(arch, parameters='standard').eval()
                             for arch in surrogates_list]
         return surrogate_models
@@ -212,6 +218,7 @@ def main():
 
         status = 'Success' if (torch.argmax(adversarial_prediction) != torch.argmax(target)) else 'Failure'
         print('Attack status: ' + status + '\n')
+        print(SURROGATES_LIST_ALL)
 
         adversarial_examples_list.append(adversarial_example)
         predictions_list.append({'original': original_prediction,
@@ -221,6 +228,7 @@ def main():
     print('Serializing results...')
     torch.save({'adversarial_examples': adversarial_examples_list,
                 'predictions': predictions_list,
+                'surrogates_list': SURROGATES_LIST_ALL,
                 'args_dict': args_dict},
                args_dict['save_file_location'])
     print('Finished!\n')
