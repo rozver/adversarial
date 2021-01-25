@@ -34,8 +34,9 @@ class Attacker:
         if args_dict['norm'] == 'l2':
             attack_step = L2Step
 
-        self.masks_batch = masks_batch
         self.criterion = torch.nn.CrossEntropyLoss(reduction='none')
+        self.optimization_direction = -1 if args_dict['unadversarial'] or args_dict['targeted'] else 1
+        self.masks_batch = masks_batch
         self.attack_step = attack_step
 
     def __call__(self, image, mask, target, random_start=False):
@@ -48,8 +49,6 @@ class Attacker:
             image = step.random_perturb(image, mask)
 
         label = torch.argmax(target).view(1)
-        if self.args_dict['targeted']:
-            label[0] = target
 
         x = image.clone().detach().requires_grad_(True)
 
@@ -124,27 +123,17 @@ class Attacker:
     def normal_loss(self, x, label):
         prediction = predict(self.model, x)
 
-        optimization_direction = 1
-
-        if self.args_dict['targeted']:
-            optimization_direction = -1
-
-        loss = optimization_direction * self.criterion(prediction, label)
+        loss = self.optimization_direction * self.criterion(prediction, label)
         return loss.cuda()
 
     def transfer_loss(self, x, label):
-        optimization_direction = 1
-
-        if self.args_dict['targeted']:
-            optimization_direction = -1
-
         loss = torch.zeros([1])
 
         for current_model in self.surrogate_models:
             prediction = predict(current_model, x)
             current_loss = self.criterion(prediction, label)
 
-            loss = torch.add(loss, optimization_direction * current_loss)
+            loss = torch.add(loss, self.optimization_direction * current_loss)
 
         loss = loss / len(self.surrogate_models)
         return loss.cuda()
@@ -163,6 +152,7 @@ def main():
     parser.add_argument('--norm', type=str, choices=['l2', 'linf'], default='linf')
     parser.add_argument('--step_size', type=float, default=1)
     parser.add_argument('--num_iterations', type=int, default=10)
+    parser.add_argument('--unadversarial', default=False, action='store_true')
     parser.add_argument('--targeted', default=False, action='store_true')
     parser.add_argument('--eot', default=False, action='store_true')
     parser.add_argument('--transfer', default=False, action='store_true')
@@ -188,7 +178,9 @@ def main():
                            from_robustness=args_dict['from_robustness']).eval()
 
     attacker = Attacker(model, args_dict)
-    target = torch.FloatTensor([TARGET_CLASS])
+
+    target = torch.zeros(1000)
+    target[TARGET_CLASS] = 1
 
     print('Loading dataset...')
     if args_dict['masks']:
@@ -215,7 +207,12 @@ def main():
         adversarial_example = attacker(image.cuda(), mask[0].cuda(), target, False)
         adversarial_prediction = predict(model, adversarial_example)
 
-        status = 'Success' if (torch.argmax(adversarial_prediction) != torch.argmax(target)) else 'Failure'
+        if args_dict['unadversarial'] or args_dict['targeted']:
+            expression = torch.argmax(adversarial_prediction) == torch.argmax(target)
+        else:
+            expression = torch.argmax(adversarial_prediction) != torch.argmax(target)
+            
+        status = 'Success' if expression else 'Failure'
         print('Attack status: ' + status + '\n')
 
         adversarial_examples_list.append(adversarial_example)
