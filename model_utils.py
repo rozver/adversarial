@@ -76,6 +76,18 @@ OTHER_MODELS = [
 ARCHS_LIST = TORCHVISION_ARCHS + PRETRAINEDMODELS_ARCHS
 
 
+def predict(model, image):
+    prediction = model(image.unsqueeze(0))
+    if type(prediction) == tuple:
+        return prediction[0]
+    return prediction
+
+
+def weight_reset(m):
+    if isinstance(m, torch.nn.Conv2d) or isinstance(m, torch.nn.Linear):
+        m.reset_parameters()
+
+
 def get_archs_dict():
     torchvision_models_dict = dict.fromkeys(TORCHVISION_ARCHS, 'torchvision')
     pretrainedmodels_dict = dict.fromkeys(PRETRAINEDMODELS_ARCHS, 'pretrainedmodels')
@@ -116,6 +128,10 @@ def get_model(arch, parameters=None):
             else:
                 model = loader.__dict__[arch](*parameters[:1])
             model.arch = arch
+
+            if archs_dict[arch] == 'pretrainedmodels' and len(parameters) == 0:
+                model.apply(weight_reset)
+
             return model
         else:
             raise ValueError('Incorrect model parameters format - has to be a list!')
@@ -153,10 +169,3 @@ def load_model(location, arch=None, from_robustness=False):
         return model
     else:
         raise ValueError('Invalid checkpoint location')
-
-
-def predict(model, image):
-    prediction = model(image.unsqueeze(0))
-    if type(prediction) == tuple:
-        return prediction[0]
-    return prediction
