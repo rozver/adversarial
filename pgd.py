@@ -55,6 +55,7 @@ class Attacker:
         if self.args_dict['selective_transfer']:
             self.surrogate_models = self.selective_transfer(image.cpu(),
                                                             mask.cpu(),
+                                                            label,
                                                             step,
                                                             self.args_dict['num_iterations']//10+1)
 
@@ -97,11 +98,10 @@ class Attacker:
 
         return best_x.cpu()
 
-    def selective_transfer(self, image, mask, step, num_queries):
+    def selective_transfer(self, image, mask, label, step, num_queries):
         model_scores = {}
         model_scores = defaultdict(lambda: 0, model_scores)
 
-        label = torch.argmax(predict(self.model, image)).unsqueeze(0)
         for iteration in range(num_queries):
             x = image.clone().detach().requires_grad_(True)
             x = step.random_perturb(x, mask)
@@ -112,7 +112,7 @@ class Attacker:
                 model_scores[arch] += current_loss
 
         surrogates_list = [arch
-                           for arch in sorted(model_scores, key=model_scores.get, reverse=True)
+                           for arch in sorted(model_scores, key=model_scores.get)
                            [:self.args_dict['num_surrogates']]]
         SURROGATES_LIST_ALL.append(surrogates_list)
 
