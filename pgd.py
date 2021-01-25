@@ -211,7 +211,7 @@ def main():
             expression = torch.argmax(adversarial_prediction) == torch.argmax(target)
         else:
             expression = torch.argmax(adversarial_prediction) != torch.argmax(target)
-            
+
         status = 'Success' if expression else 'Failure'
         print('Attack status: ' + status + '\n')
 
