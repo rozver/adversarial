@@ -1,7 +1,7 @@
 import torch
 from pgd import Attacker
 from dataset_utils import create_data_loaders, Normalizer
-from model_utils import MODELS_LIST, get_model, load_model
+from model_utils import ARCHS_LIST, get_model, load_model
 from file_utils import validate_save_file_location
 import argparse
 import os
@@ -16,7 +16,8 @@ class Trainer:
             self.model = load_model(location=training_args_dict['checkpoint_location'])
             training_args_dict['arch'] = self.model.arch
         else:
-            self.model = get_model(arch=training_args_dict['arch'], pretrained=training_args_dict['pretrained'])
+            self.model = get_model(arch=training_args_dict['arch'],
+                                   parameters=('standard' if training_args_dict['pretrained'] else None))
 
         self.normalize = Normalizer(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         self.training_args_dict = training_args_dict
@@ -85,7 +86,7 @@ class Trainer:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--arch', type=str, choices=MODELS_LIST, default='resnet50')
+    parser.add_argument('--arch', type=str, choices=ARCHS_LIST, default='resnet50')
     parser.add_argument('--dataset', type=str, default='dataset/imagenet-airplanes.pt')
     parser.add_argument('--pretrained', default=False, action='store_true')
     parser.add_argument('--checkpoint_location', type=str, default=None)
@@ -116,7 +117,7 @@ def main():
         images = torch.load(dataset_properties['images'])
 
         if dataset_properties['labels'] is None:
-            eval_model = get_model(arch=args_dict['arch'], pretrained=True)
+            eval_model = get_model(arch=args_dict['arch'],  parameters='standard')
             normalize = Normalizer(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
             labels = [torch.argmax(eval_model(normalize(x.unsqueeze(0)))) for x in images]
         else:
