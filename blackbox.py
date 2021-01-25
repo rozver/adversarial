@@ -1,16 +1,14 @@
 import torch
 from torch.nn.functional import softmax
-from torchvision.utils import save_image
-from model_utils import ARCHS_LIST, get_model
+from model_utils import ARCHS_LIST, predict, get_model
 from pgd import get_current_time
 from gradient_analysis import get_gradient, normalize_grad, get_sorted_order
 from file_utils import validate_save_file_location
 import argparse
-import sys
 
 
 def get_simba_gradient(model, image, criterion):
-    prediction = model(image.unsqueeze(0).cuda())
+    prediction = predict(model, image.unsqueeze(0).cuda())
     label = torch.argmax(prediction).unsqueeze(0)
     grad = get_gradient(model, image, label, criterion)
     grad_normalized = normalize_grad(grad)
@@ -19,7 +17,7 @@ def get_simba_gradient(model, image, criterion):
 
 def get_probabilities(model, x, y):
     with torch.no_grad():
-        prediction = model(x.unsqueeze(0))
+        prediction = predict(model, x.unsqueeze(0))
     prediction_softmax = softmax(prediction, 1)
     prediction_softmax_y = prediction_softmax[0][y]
 
@@ -122,7 +120,7 @@ def main():
 
     for index, (image, mask) in enumerate(dataset):
         with torch.no_grad():
-            original_prediction = model(image.cuda().unsqueeze(0))
+            original_prediction = predict(model, image.cuda().unsqueeze(0))
         label = torch.argmax(original_prediction)
 
         if args_dict['gradient_masks']:
@@ -137,7 +135,7 @@ def main():
             adversarial_example = (image.cuda() + delta).clamp(0, 1)
             
         with torch.no_grad():
-            adversarial_prediction = model(adversarial_example.unsqueeze(0))
+            adversarial_prediction = predict(model, adversarial_example.unsqueeze(0))
 
         adversarial_examples_list.append(adversarial_example.cpu())
         predictions_list.append({'original': original_prediction.cpu(),

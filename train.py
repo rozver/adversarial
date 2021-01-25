@@ -1,7 +1,7 @@
 import torch
 from pgd import Attacker
 from dataset_utils import create_data_loaders, Normalizer
-from model_utils import ARCHS_LIST, get_model, load_model
+from model_utils import ARCHS_LIST, predict, get_model, load_model
 from file_utils import validate_save_file_location
 import argparse
 import os
@@ -38,7 +38,7 @@ class Trainer:
                     images_batch = self.create_adversarial_examples(images_batch, labels_batch)
 
                 self.model = self.model.cuda().train()
-                predictions = self.model(self.normalize(images_batch.cuda()))
+                predictions = predict(self.model, self.normalize(images_batch.cuda()))
 
                 self.optimizer.zero_grad()
                 loss = self.criterion(predictions, labels_batch.cuda())

@@ -122,7 +122,7 @@ class Attacker:
         return surrogate_models
 
     def normal_loss(self, x, label):
-        prediction = self.model(x.unsqueeze(0))
+        prediction = predict(self.model, x)
 
         optimization_direction = 1
 
@@ -141,7 +141,7 @@ class Attacker:
         loss = torch.zeros([1])
 
         for current_model in self.surrogate_models:
-            prediction = current_model(x.unsqueeze(0))
+            prediction = predict(current_model, x)
             current_loss = self.criterion(prediction, label)
 
             loss = torch.add(loss, optimization_direction * current_loss)
@@ -207,13 +207,13 @@ def main():
     print('Starting PGD...')
     for index, (image, mask) in enumerate(dataset):
         print('Image: ' + str(index + 1) + '/' + str(dataset_length))
-        original_prediction = model(image.unsqueeze(0))
+        original_prediction = predict(model, image)
 
         if not args_dict['targeted']:
             target = original_prediction
 
         adversarial_example = attacker(image.cuda(), mask[0].cuda(), target, False)
-        adversarial_prediction = model(adversarial_example.unsqueeze(0))
+        adversarial_prediction = predict(model, adversarial_example)
 
         status = 'Success' if (torch.argmax(adversarial_prediction) != torch.argmax(target)) else 'Failure'
         print('Attack status: ' + status + '\n')

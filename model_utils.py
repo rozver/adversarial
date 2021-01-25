@@ -76,8 +76,11 @@ OTHER_MODELS = [
 ARCHS_LIST = TORCHVISION_ARCHS + PRETRAINEDMODELS_ARCHS
 
 
-def predict(model, image):
-    prediction = model(image.unsqueeze(0))
+def predict(model, x):
+    if len(x.size()) != 4:
+        x = x.unsqueeze(0)
+    prediction = model(x)
+
     if type(prediction) == tuple:
         return prediction[0]
     return prediction
