@@ -6,6 +6,7 @@ from file_utils import get_current_time, validate_save_file_location
 from collections import defaultdict
 import argparse
 import random
+import copy
 
 TARGET_CLASS = 934
 SURROGATES_LIST_ALL = []
@@ -19,13 +20,11 @@ class Attacker:
 
         if args_dict['transfer'] or args_dict['selective_transfer']:
             self.loss = self.transfer_loss
-            self.available_surrogates_list = ARCHS_LIST
+            self.available_surrogates_list = copy.copy(ARCHS_LIST)
             self.available_surrogates_list.remove(args_dict['arch'])
 
             if args_dict['transfer']:
-                surrogates_list = ARCHS_LIST
-                surrogates_list.remove(args_dict['arch'])
-                surrogates_list = random.shuffle(surrogates_list)[:args_dict['num_surrogates']]
+                surrogates_list = random.choices(self.available_surrogates_list, k=args_dict['num_surrogates'])
                 SURROGATES_LIST_ALL.append(surrogates_list)
                 self.surrogate_models = [get_model(arch, parameters='standard').eval()
                                          for arch in surrogates_list]
@@ -218,7 +217,6 @@ def main():
 
         status = 'Success' if (torch.argmax(adversarial_prediction) != torch.argmax(target)) else 'Failure'
         print('Attack status: ' + status + '\n')
-        print(SURROGATES_LIST_ALL)
 
         adversarial_examples_list.append(adversarial_example)
         predictions_list.append({'original': original_prediction,
