@@ -122,7 +122,6 @@ class Attacker:
 
     def normal_loss(self, x, label):
         prediction = predict(self.model, x)
-
         loss = self.optimization_direction * self.criterion(prediction, label)
         return loss.cuda()
 
@@ -132,7 +131,6 @@ class Attacker:
         for current_model in self.surrogate_models:
             prediction = predict(current_model, x)
             current_loss = self.criterion(prediction, label)
-
             loss = torch.add(loss, self.optimization_direction * current_loss)
 
         loss = loss / len(self.surrogate_models)
