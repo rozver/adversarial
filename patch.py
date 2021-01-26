@@ -1,8 +1,7 @@
 import torch
-from pgd import Attacker
+from pgd import TARGET_CLASS, Attacker
 from model_utils import ARCHS_LIST, get_model, load_model
 from file_utils import get_current_time, validate_save_file_location
-from matplotlib import pyplot as plt
 import random
 import argparse
 
@@ -52,10 +51,13 @@ def main():
     parser.add_argument('--norm', type=str, choices=['l2', 'linf'], default='linf')
     parser.add_argument('--step_size', type=float, default=1)
     parser.add_argument('--num_iterations', type=int, default=10)
+    parser.add_argument('--unadversarial', default=False, action='store_true')
     parser.add_argument('--targeted', default=False, action='store_true')
     parser.add_argument('--eot', default=False, action='store_true')
     parser.add_argument('--transfer', default=False, action='store_true')
-    parser.add_argument('--save_file_location', type=str, default='results/pgd_new_experiments/pgd-patch-' + time + '.pt')
+    parser.add_argument('--selective_transfer', default=False, action='store_true')
+    parser.add_argument('--num_surrogates', type=int, choices=range(0, len(ARCHS_LIST) - 1), default=5)
+    parser.add_argument('--save_file_location', type=str, default='results/pgd_new_experiments/patch-' + time + '.pt')
     args_ns = parser.parse_args()
 
     args_dict = vars(args_ns)
@@ -75,7 +77,8 @@ def main():
                            from_robustness=args_dict['from_robustness']).eval()
 
     attacker = Attacker(model, args_dict)
-    target = torch.FloatTensor([934])
+    target = torch.zeros(1000)
+    target[TARGET_CLASS] = 1
 
     print('Loading dataset...')
     if args_dict['masks']:
@@ -107,10 +110,12 @@ def main():
         adversarial_example = attacker(image.cuda(), patch_mask.cuda(), target, False)
         adversarial_prediction = model(adversarial_example.unsqueeze(0))
 
-        plt.imshow(adversarial_example.cpu().permute(1, 2, 0))
-        plt.show()
+        if args_dict['unadversarial'] or args_dict['targeted']:
+            expression = torch.argmax(adversarial_prediction) == torch.argmax(target)
+        else:
+            expression = torch.argmax(adversarial_prediction) != torch.argmax(target)
 
-        status = 'Success' if (torch.argmax(adversarial_prediction) != torch.argmax(target)) else 'Failure'
+        status = 'Success' if expression else 'Failure'
         print('Attack status: ' + status + '\n')
 
         adversarial_examples_list.append(adversarial_example)
