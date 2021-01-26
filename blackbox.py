@@ -1,6 +1,6 @@
 import torch
 from torch.nn.functional import softmax
-from model_utils import MODELS_LIST, get_model
+from model_utils import ARCHS_LIST, predict, get_model
 from pgd import get_current_time
 from gradient_analysis import get_gradient, normalize_grad, get_sorted_order
 from file_utils import validate_save_file_location
@@ -8,7 +8,7 @@ import argparse
 
 
 def get_simba_gradient(model, image, criterion):
-    prediction = model(image.unsqueeze(0).cuda())
+    prediction = predict(model, image.unsqueeze(0).cuda())
     label = torch.argmax(prediction).unsqueeze(0)
     grad = get_gradient(model, image, label, criterion)
     grad_normalized = normalize_grad(grad)
@@ -17,7 +17,7 @@ def get_simba_gradient(model, image, criterion):
 
 def get_probabilities(model, x, y):
     with torch.no_grad():
-        prediction = model(x.unsqueeze(0))
+        prediction = predict(model, x.unsqueeze(0))
     prediction_softmax = softmax(prediction, 1)
     prediction_softmax_y = prediction_softmax[0][y]
 
@@ -51,21 +51,10 @@ def simba_pixels(model, x, y, args_dict, g):
         if iteration == n:
             break
         c, w, h = get_tensor_pixel_indices(pixel, x.size())
-        q[c, w, h] = 1
 
-        p_prim_left = get_probabilities(model, (x + delta + eps * q).clamp(0, 1), y)
-
-        if p_prim_left < p:
-            delta = delta + eps * q
-            p = p_prim_left
-
-        else:
-            p_prim_right = get_probabilities(model, (x + delta - eps * q).clamp(0, 1), y)
-            if p_prim_right < p:
-                delta = delta + eps * q
-                p = p_prim_left
-
-        q[c, w, h] = 0
+        delta[0, w, h] = 1-x[0, w, h]
+        delta[1, w, h] = - x[1, w, h]
+        delta[2, w, h] = -x[2, w, h]
 
     return delta
 
@@ -97,12 +86,12 @@ def main():
     time = get_current_time()
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model', type=str, choices=MODELS_LIST, default='resnet50')
+    parser.add_argument('--model', type=str, choices=ARCHS_LIST, default='resnet50')
     parser.add_argument('--dataset', type=str, default='dataset/imagenet-airplanes-images.pt')
     parser.add_argument('--masks', default=False, action='store_true')
     parser.add_argument('--gradient_masks', default=False, action='store_true')
     parser.add_argument('--attack_type', type=str, choices=['nes', 'simba'], default='simba')
-    parser.add_argument('--gradient_model', type=str, choices=MODELS_LIST, default='inception_v3')
+    parser.add_argument('--gradient_model', type=str, choices=ARCHS_LIST, default='resnet50')
     parser.add_argument('--eps', type=float, default=10)
     parser.add_argument('--num_iterations', type=int, default=1)
     parser.add_argument('--save_file_location', type=str, default='results/blackbox/' + time + '.pt')
@@ -110,7 +99,7 @@ def main():
 
     validate_save_file_location(args_dict['save_file_location'])
 
-    model = get_model(args_dict['model'], pretrained=True).cuda().eval()
+    model = get_model(args_dict['model'], parameters='standard').cuda().eval()
     criterion = torch.nn.CrossEntropyLoss(reduction='none')
 
     if args_dict['masks']:
@@ -126,12 +115,12 @@ def main():
 
     adversarial_examples_list = []
     predictions_list = []
-    model_grad = get_model(args_dict['gradient_model'], True).cuda().eval()
+    model_grad = get_model(args_dict['gradient_model'], parameters='standard').cuda().eval()
     criterion = torch.nn.CrossEntropyLoss(reduction='none')
 
-    for image, mask in dataset:
+    for index, (image, mask) in enumerate(dataset):
         with torch.no_grad():
-            original_prediction = model(image.cuda().unsqueeze(0))
+            original_prediction = predict(model, image.cuda().unsqueeze(0))
         label = torch.argmax(original_prediction)
 
         if args_dict['gradient_masks']:
@@ -144,9 +133,9 @@ def main():
         else:
             delta = simba_pixels(model, image.cuda(), label.cuda(), args_dict, mask.cuda())
             adversarial_example = (image.cuda() + delta).clamp(0, 1)
-
+            
         with torch.no_grad():
-            adversarial_prediction = model(adversarial_example.unsqueeze(0))
+            adversarial_prediction = predict(model, adversarial_example.unsqueeze(0))
 
         adversarial_examples_list.append(adversarial_example.cpu())
         predictions_list.append({'original': original_prediction.cpu(),

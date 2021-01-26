@@ -1,23 +1,16 @@
 import torch
 from torch import autograd
-from model_utils import MODELS_LIST, get_model, load_model
+from model_utils import ARCHS_LIST, get_model, load_model, predict
 from file_utils import validate_save_file_location
 import argparse
 from pgd import get_current_time
 import os
 
 
-def get_prediction(model, image):
-    prediction = model(image.unsqueeze(0))
-    if type(prediction) == tuple:
-        return prediction[0]
-    return prediction
-
-
 def get_gradient(model, image, label, criterion):
     image = autograd.Variable(image, requires_grad=True).cuda()
 
-    prediction = get_prediction(model, image)
+    prediction = predict(model, image)
     loss = criterion(prediction, label)
 
     grad = autograd.grad(loss, image)[0]
@@ -44,7 +37,7 @@ def get_grad_dict(model, criterion, args_dict):
             if dataset.__len__() == 0:
                 continue
             for image, _ in dataset:
-                prediction = get_prediction(model, image.cuda())
+                prediction = predict(model, image.cuda())
                 label = torch.argmax(prediction, dim=1).cuda()
 
                 current_grad = get_gradient(model, image, label, criterion)
@@ -126,7 +119,7 @@ def get_averages_dict(model, criterion, args_dict):
             if dataset.__len__() == 0:
                 continue
             for image, _ in dataset:
-                prediction = get_prediction(model, image.cuda())
+                prediction = predict(model, image.cuda())
                 label = torch.argmax(prediction, dim=1).cuda()
 
                 current_grad = get_gradient(model, image, label, criterion)
@@ -144,7 +137,7 @@ def main():
     time = get_current_time()
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--arch', type=str, choices=MODELS_LIST, default='resnet50')
+    parser.add_argument('--arch', type=str, choices=ARCHS_LIST, default='resnet50')
     parser.add_argument('--pretrained', default=False, action='store_true')
     parser.add_argument('--checkpoint_location', type=str, default=None)
     parser.add_argument('--from_robustness', default=False, action='store_true')
@@ -160,7 +153,7 @@ def main():
                            arch=args_dict['arch'],
                            from_robustness=args_dict['from_robustness']).cuda().eval()
     else:
-        model = get_model(args_dict['arch'], args_dict['pretrained']).cuda().eval()
+        model = get_model(args_dict['arch'], 'standard' if [args_dict['pretrained']] else None).cuda().eval()
 
     criterion = torch.nn.CrossEntropyLoss(reduction='none')
 
