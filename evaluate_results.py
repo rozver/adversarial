@@ -52,16 +52,16 @@ def save_images(results, results_location, dataset):
     for index, (original_image, adversarial_example) in enumerate(zip(dataset, results['adversarial_examples'])):
         if results['args_dict']['masks']:
             original_image, mask = original_image
-            save_image(mask, (masks_directory + str(index) + '.png'), normalize=True)
+            save_image(mask, (masks_directory + str(index) + '.png'))
 
         if adversarial_example.size() != original_image.size():
             continue
 
         noise = original_image - adversarial_example
 
-        save_image(original_image, (original_directory + str(index) + '.png'), normalize=True)
-        save_image(adversarial_example, (adversarial_directory + str(index) + '.png'), normalize=True)
-        save_image(noise, (noises_directory + str(index) + '.png'), normalize=True)
+        save_image(original_image, (original_directory + str(index) + '.png'))
+        save_image(adversarial_example, (adversarial_directory + str(index) + '.png'))
+        save_image(noise, (noises_directory + str(index) + '.png'))
 
 
 def main():
