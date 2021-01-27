@@ -44,32 +44,26 @@ class Normalizer(torch.nn.Module, ABC):
 
 
 class ImageNetPreprocessor:
-    def __init__(self, location, model, rgb=True):
+    def __init__(self, location, model, resize=True, rgb=True):
         if os.path.exists(location):
             self.location = location
         else:
             raise ValueError('Invalid dataset location!')
-        self.rgb = rgb
         self.model = model
+        self.resize = resize
+        self.rgb = rgb
         self.dataset_images = None
         self.labels = None
 
     def set_dataset_images(self):
-        if self.rgb:
-            transform = transforms.Compose([
-                transforms.Resize(256),
-                transforms.CenterCrop(224),
-                transforms.ToTensor(),
-            ])
+        transform_list = [transforms.ToTensor()]
+        if self.resize:
+            transform_list.append(transforms.Resize(256))
+            transform_list.append(transforms.CenterCrop(224))
+        if not self.rgb:
+            transform_list.append(transforms.Grayscale(num_output_channels=3))
 
-        else:
-            transform = transforms.Compose([
-                transforms.Resize(256),
-                transforms.CenterCrop(224),
-                transforms.Grayscale(num_output_channels=3),
-                transforms.ToTensor(),
-            ])
-
+        transform = transforms.Compose(transform_list)
         self.dataset_images = datasets.ImageNet(location=self.location, transform=transform)
 
     def set_labels(self):
