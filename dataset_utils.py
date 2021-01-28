@@ -1,12 +1,15 @@
 from abc import ABC
 import torch
 import shutil
+import torchvision
 from pycocotools.coco import COCO
 from torchvision.transforms import transforms
 from torchvision.utils import save_image
 import numpy as np
-import os
 import datasets
+from model_utils import get_model
+import os
+import json
 
 
 def normalize_names(location):
@@ -175,3 +178,49 @@ class CocoCategoryPreprocessor:
         self.export_images_and_masks()
         self.set_dataset()
         self.serialize()
+
+
+def create_adversarial_dataset(results_location):
+    results = torch.load(results_location)
+    dataset = torch.load(results['args_dict']['dataset'])
+    folder_location = 'dataset/adversarial/' + results['args_dict']['save_file_location'].split('/')[-1][:-3]
+    if hasattr(dataset, 'category'):
+        folder_location = os.path.join(folder_location, dataset.category)
+
+    images_location = os.path.join(folder_location, 'images')
+    masks_location = os.path.join(folder_location, 'masks')
+    if not os.path.exists(folder_location):
+        os.makedirs(folder_location)
+        os.makedirs(images_location)
+        if results['args_dict']['masks']:
+            os.makedirs(masks_location)
+
+    for i in range(0, len(results['adversarial_examples'])):
+        adversarial_example = results['adversarial_examples'][i]
+        save_image(adversarial_example, os.path.join(images_location, str(i) + '.png'))
+
+        if results['args_dict']['masks']:
+            _, mask = dataset[i]
+            save_image(mask, os.path.join(masks_location, str(i) + '.png'))
+
+    if results['args_dict']['masks']:
+        transform = torchvision.transforms.ToTensor()
+        parent_directory = os.path.abspath(folder_location + '/../')
+        adversarial_dataset = datasets.CocoCategory(location=parent_directory,
+                                           category=dataset.category,
+                                           transform=transform)
+        torch.save(adversarial_dataset, os.path.join(parent_directory, 'images.pt'))
+        with open(os.path.join(parent_directory, 'args_dict.json'), 'w') as file:
+            json.dump(results['args_dict'], file)
+
+    else:
+        model = get_model('resnet50', 'standard').eval()
+        preprocessor = ImageNetPreprocessor(location=folder_location,
+                                            model=model,
+                                            resize=False)
+
+        preprocessor.set_dataset_images()
+        adversarial_dataset = preprocessor.dataset_images
+        torch.save(adversarial_dataset, os.path.join(folder_location, 'images.pt'))
+        with open(os.path.join(folder_location, 'args_dict.json'), 'w') as file:
+            json.dump(results['args_dict'], file)
