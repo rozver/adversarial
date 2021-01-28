@@ -215,7 +215,7 @@ def create_adversarial_dataset(results_location):
 
     else:
         model = get_model('resnet50', 'standard').eval()
-        preprocessor = ImageNetPreprocessor(location=folder_location,
+        preprocessor = ImageNetPreprocessor(location=images_location,
                                             model=model,
                                             resize=False)
 
