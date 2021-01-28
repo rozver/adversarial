@@ -164,7 +164,7 @@ def load_model(location, arch=None, from_robustness=False):
                                                                 parameters=None),
                                                       get_state_dict(location))
             model.load_state_dict(state_dict)
-            return model
+            return model.model
 
         state_dict = get_state_dict(location=location)
         model = get_model(arch=arch, parameters=None)
