@@ -1,14 +1,14 @@
-from abc import ABC
 import torch
-import shutil
 import torchvision
+import numpy as np
 from pycocotools.coco import COCO
 from torchvision.transforms import transforms
 from torchvision.utils import save_image
-import numpy as np
 import datasets
 from model_utils import get_model
 import os
+from abc import ABC
+import shutil
 import json
 
 
@@ -89,7 +89,7 @@ class ImageNetPreprocessor:
                 labels = None
                 labels_location = None
 
-            properties_location = self.location+suffix_location
+            properties_location = self.location + suffix_location
             properties_dict = {
                 'images': images_location,
                 'labels': labels_location,
@@ -207,8 +207,8 @@ def create_adversarial_dataset(results_location):
         transform = torchvision.transforms.ToTensor()
         parent_directory = os.path.abspath(folder_location + '/../')
         adversarial_dataset = datasets.CocoCategory(location=parent_directory,
-                                           category=dataset.category,
-                                           transform=transform)
+                                                    category=dataset.category,
+                                                    transform=transform)
         torch.save(adversarial_dataset, os.path.join(parent_directory, 'images.pt'))
         with open(os.path.join(parent_directory, 'args_dict.json'), 'w') as file:
             json.dump(results['args_dict'], file)
