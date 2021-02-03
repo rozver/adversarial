@@ -38,9 +38,9 @@ def create_data_loaders(images, labels, batch_size=10, num_workers=4, shuffle=Tr
     return images_loader, labels_loader
 
 
-def inspect_dataset(dataset, is_location=False):
+def inspect_dataset(dataset):
     matplotlib.use('TkAgg')
-    if is_location:
+    if type(dataset) == str:
         dataset = torch.load(dataset)
 
     for entry in dataset:
