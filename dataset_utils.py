@@ -2,6 +2,8 @@ import torch
 import torchvision
 import numpy as np
 from pycocotools.coco import COCO
+import matplotlib
+from matplotlib import pyplot as plt
 from torchvision.transforms import transforms
 from torchvision.utils import save_image
 import datasets
@@ -34,6 +36,24 @@ def create_data_loaders(images, labels, batch_size=10, num_workers=4, shuffle=Tr
     images_loader = torch.utils.data.DataLoader(images, batch_size=batch_size, num_workers=num_workers)
     labels_loader = torch.utils.data.DataLoader(labels, batch_size=batch_size, num_workers=num_workers)
     return images_loader, labels_loader
+
+
+def inspect_dataset(location):
+    matplotlib.use('TkAgg')
+    dataset = torch.load(location)
+
+    for entry in dataset:
+        if len(entry) == 2:
+            image, mask = entry
+            fig = plt.figure()
+            fig.add_subplot(1, 2, 1)
+            plt.imshow(image.permute(1, 2, 0))
+            fig.add_subplot(1, 2, 2)
+            plt.imshow(mask.permute(1, 2, 0))
+            plt.show()
+        else:
+            plt.imshow(entry.permute(1, 2, 0))
+            plt.show()
 
 
 class Normalizer(torch.nn.Module, ABC):
