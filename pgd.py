@@ -202,6 +202,9 @@ def main():
         if not args_dict['targeted']:
             target = original_prediction
 
+        if mask.size != image.size():
+            mask = torch.ones_like(image)
+        
         adversarial_example = attacker(image.cuda(), mask[0].cuda(), target, False)
         adversarial_prediction = predict(model, adversarial_example)
 
