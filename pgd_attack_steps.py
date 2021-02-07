@@ -50,5 +50,5 @@ class L2Step(AttackStep):
 
     def random_perturb(self, x, mask):
         perturbation = torch.rand_like(x)*mask
-        new_x = self.project(self.orig_x+perturbation)
+        new_x = self.project(self.orig_x.cpu()+perturbation)
         return new_x
