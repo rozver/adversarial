@@ -104,7 +104,7 @@ class Attacker:
 
         for iteration in range(num_queries):
             x = image.clone().detach().requires_grad_(True)
-            x = step.random_perturb(x, mask)
+            x = step.random_perturb(x.cpu(), mask.cpu())
             for arch in self.available_surrogates_list:
                 current_model = get_model(arch, 'standard').eval()
                 prediction = predict(current_model, x)
@@ -204,7 +204,7 @@ def main():
 
         if mask.size != image.size():
             mask = torch.ones_like(image)
-        
+
         adversarial_example = attacker(image.cuda(), mask[0].cuda(), target, False)
         adversarial_prediction = predict(model, adversarial_example)
 
