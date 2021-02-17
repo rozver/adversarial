@@ -24,7 +24,7 @@ class Attacker:
             self.available_surrogates_list.remove(args_dict['arch'])
 
             if args_dict['transfer']:
-                surrogates_list = random.choices(self.available_surrogates_list, k=args_dict['num_surrogates'])
+                surrogates_list = random.sample(self.available_surrogates_list, args_dict['num_surrogates'])
                 SURROGATES_LIST_ALL.append(surrogates_list)
                 self.surrogate_models = [get_model(arch, parameters='standard').eval()
                                          for arch in surrogates_list]
