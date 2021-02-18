@@ -26,7 +26,7 @@ class Attacker:
             if args_dict['transfer']:
                 surrogates_list = random.sample(self.available_surrogates_list, args_dict['num_surrogates'])
                 SURROGATES_LIST_ALL.append(surrogates_list)
-                self.surrogate_models = [get_model(arch, parameters='standard').eval()
+                self.surrogate_models = [get_model(arch, parameters='standard', freeze=True).eval()
                                          for arch in surrogates_list]
         else:
             self.loss = self.normal_loss
@@ -55,7 +55,6 @@ class Attacker:
         if self.args_dict['selective_transfer']:
             self.surrogate_models = self.selective_transfer(image.cpu(),
                                                             mask.cpu(),
-                                                            label,
                                                             step,
                                                             self.args_dict['num_iterations']//10+1)
 
@@ -98,17 +97,24 @@ class Attacker:
 
         return best_x.cpu()
 
-    def selective_transfer(self, image, mask, label, step, num_queries):
+    def selective_transfer(self, image, mask, step, num_queries):
         model_scores = {}
         model_scores = defaultdict(lambda: 0, model_scores)
+        mse = torch.nn.MSELoss(reduction='none')
 
         for iteration in range(num_queries):
-            x = image.clone().detach().requires_grad_(True)
+            x = image.clone().detach().requires_grad_(False)
             x = step.random_perturb(x.cpu(), mask.cpu())
+
+            prediction = predict(self.model, x)[0]
+            label = torch.argmax(prediction).item()
+
             for arch in self.available_surrogates_list:
-                current_model = get_model(arch, 'standard').eval()
-                prediction = predict(current_model, x)
-                current_loss = self.criterion(prediction, label).item()
+                current_model = get_model(arch, 'standard', freeze=True).eval()
+
+                current_prediction = predict(current_model, x)[0]
+
+                current_loss = mse(current_prediction[label], prediction[label])
                 model_scores[arch] += current_loss
 
         surrogates_list = [arch
@@ -116,7 +122,7 @@ class Attacker:
                            [:self.args_dict['num_surrogates']]]
         SURROGATES_LIST_ALL.append(surrogates_list)
 
-        surrogate_models = [get_model(arch, parameters='standard').eval()
+        surrogate_models = [get_model(arch, parameters='standard', freeze=True).eval()
                             for arch in surrogates_list]
         return surrogate_models
 
@@ -169,7 +175,7 @@ def main():
     print(str(args_dict) + '\n')
 
     if args_dict['checkpoint_location'] is None:
-        model = get_model(arch=args_dict['arch'], parameters='standard').eval()
+        model = get_model(arch=args_dict['arch'], parameters='standard', freeze=True).eval()
     else:
         model = load_model(location=args_dict['checkpoint_location'],
                            arch=args_dict['arch'],

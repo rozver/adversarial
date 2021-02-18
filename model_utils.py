@@ -79,11 +79,18 @@ ARCHS_LIST = TORCHVISION_ARCHS + PRETRAINEDMODELS_ARCHS
 def predict(model, x):
     if len(x.size()) != 4:
         x = x.unsqueeze(0)
+
     prediction = model(x)
 
     if type(prediction) == tuple:
         return prediction[0]
     return prediction
+
+
+def freeze_parameters(model):
+    for param in model.parameters():
+        param.requires_grad = False
+    return model
 
 
 def weight_reset(m):
@@ -116,7 +123,7 @@ def convert_to_robustness(model, state_dict):
     return model, state_dict
 
 
-def get_model(arch, parameters=None):
+def get_model(arch, parameters=None, freeze=False):
     if arch in ARCHS_LIST:
         archs_dict = get_archs_dict()
         loader = LOADERS[archs_dict[arch]]
@@ -135,7 +142,10 @@ def get_model(arch, parameters=None):
             if archs_dict[arch] == 'pretrainedmodels' and len(parameters) == 0:
                 model.apply(weight_reset)
 
+            if freeze:
+                model = freeze_parameters(model)
             return model
+
         else:
             raise ValueError('Incorrect model parameters format - has to be a list!')
     else:
