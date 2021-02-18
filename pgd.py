@@ -163,7 +163,7 @@ def main():
     parser.add_argument('--eot', default=False, action='store_true')
     parser.add_argument('--transfer', default=False, action='store_true')
     parser.add_argument('--selective_transfer', default=False, action='store_true')
-    parser.add_argument('--num_surrogates', type=int, choices=range(0, len(ARCHS_LIST)-1), default=5)
+    parser.add_argument('--num_surrogates', type=int, choices=range(1, len(ARCHS_LIST)), default=5)
     parser.add_argument('--save_file_location', type=str, default='results/pgd_new_experiments/pgd-' + time + '.pt')
     args_ns = parser.parse_args()
 
