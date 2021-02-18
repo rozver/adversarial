@@ -53,12 +53,11 @@ class Attacker:
         x = image.clone().detach().requires_grad_(True)
 
         if self.args_dict['selective_transfer']:
-            self.surrogate_models = self.selective_transfer(image.cpu(),
-                                                            mask.cpu(),
+            self.surrogate_models = self.selective_transfer(image,
+                                                            mask,
                                                             step,
                                                             self.args_dict['num_iterations']//10+1)
 
-        self.model = self.model.cpu()
         iterations_without_updates = 0
 
         for iteration in range(self.args_dict['num_iterations']):
@@ -70,9 +69,9 @@ class Attacker:
             x = x.clone().detach().requires_grad_(True)
 
             if self.args_dict['eot']:
-                loss = self.loss(t(x.cuda()).cpu(), label)
+                loss = self.loss(t(x.cuda()), label)
             else:
-                loss = self.loss(x.cpu(), label)
+                loss = self.loss(x.cuda(), label)
 
             x.register_hook(lambda grad: grad * mask.float())
             loss.backward()
@@ -95,26 +94,26 @@ class Attacker:
             x = step.step(x, grads)
             x = step.project(x)
 
-        return best_x.cpu()
+        return best_x.cuda()
 
     def selective_transfer(self, image, mask, step, num_queries):
         model_scores = {}
         model_scores = defaultdict(lambda: 0, model_scores)
-        mse = torch.nn.MSELoss(reduction='none')
+        mse_criterion = torch.nn.MSELoss(reduction='none')
 
         for iteration in range(num_queries):
             x = image.clone().detach().requires_grad_(False)
-            x = step.random_perturb(x.cpu(), mask.cpu())
+            x = step.random_perturb(x, mask)
 
             prediction = predict(self.model, x)[0]
             label = torch.argmax(prediction).item()
 
             for arch in self.available_surrogates_list:
-                current_model = get_model(arch, 'standard', freeze=True).eval()
-
+                current_model = get_model(arch, 'standard', freeze=True).cuda().eval()
                 current_prediction = predict(current_model, x)[0]
+                current_model.cpu()
 
-                current_loss = mse(current_prediction[label], prediction[label])
+                current_loss = mse_criterion(current_prediction[label], prediction[label])
                 model_scores[arch] += current_loss
 
         surrogates_list = [arch
@@ -129,18 +128,21 @@ class Attacker:
     def normal_loss(self, x, label):
         prediction = predict(self.model, x)
         loss = self.optimization_direction * self.criterion(prediction, label)
-        return loss.cuda()
+        return loss
 
     def transfer_loss(self, x, label):
-        loss = torch.zeros([1])
+        loss = torch.zeros([1]).cuda()
 
         for current_model in self.surrogate_models:
+            current_model.cuda()
             prediction = predict(current_model, x)
+            current_model.cpu()
+
             current_loss = self.criterion(prediction, label)
             loss = torch.add(loss, self.optimization_direction * current_loss)
 
         loss = loss / len(self.surrogate_models)
-        return loss.cuda()
+        return loss
 
 
 def main():
@@ -175,15 +177,15 @@ def main():
     print(str(args_dict) + '\n')
 
     if args_dict['checkpoint_location'] is None:
-        model = get_model(arch=args_dict['arch'], parameters='standard', freeze=True).eval()
+        model = get_model(arch=args_dict['arch'], parameters='standard', freeze=True).cuda().eval()
     else:
         model = load_model(location=args_dict['checkpoint_location'],
                            arch=args_dict['arch'],
-                           from_robustness=args_dict['from_robustness']).eval()
+                           from_robustness=args_dict['from_robustness']).cuda().eval()
 
     attacker = Attacker(model, args_dict)
 
-    target = torch.zeros(1000)
+    target = torch.zeros(1000).cuda()
     target[TARGET_CLASS] = 1
 
     print('Loading dataset...')
@@ -192,7 +194,7 @@ def main():
         dataset_length = dataset.__len__()
     else:
         images = torch.load(args_dict['dataset'])
-        masks = [torch.ones_like(images[0])] * images.__len__()
+        masks = [torch.ones_like(images[0]).cuda()] * images.__len__()
         dataset = zip(images, masks)
         dataset_length = images.__len__()
     print('Finished!\n')
@@ -203,7 +205,7 @@ def main():
     print('Starting PGD...')
     for index, (image, mask) in enumerate(dataset):
         print('Image: ' + str(index + 1) + '/' + str(dataset_length))
-        original_prediction = predict(model, image)
+        original_prediction = predict(model, image.cuda())
 
         if not args_dict['targeted']:
             target = original_prediction
@@ -211,7 +213,7 @@ def main():
         if mask.size != image.size():
             mask = torch.ones_like(image)
 
-        adversarial_example = attacker(image.cuda(), mask[0].cuda(), target, False)
+        adversarial_example = attacker(image, mask[0], target, False)
         adversarial_prediction = predict(model, adversarial_example)
 
         if args_dict['unadversarial'] or args_dict['targeted']:
@@ -222,9 +224,9 @@ def main():
         status = 'Success' if expression else 'Failure'
         print('Attack status: ' + status + '\n')
 
-        adversarial_examples_list.append(adversarial_example)
-        predictions_list.append({'original': original_prediction,
-                                 'adversarial': adversarial_prediction})
+        adversarial_examples_list.append(adversarial_example.cpu())
+        predictions_list.append({'original': original_prediction.cpu(),
+                                 'adversarial': adversarial_prediction.cpu()})
     print('Finished!')
 
     print('Serializing results...')
