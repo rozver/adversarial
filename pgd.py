@@ -28,6 +28,8 @@ class Attacker:
                 SURROGATES_LIST_ALL.append(surrogates_list)
                 self.surrogate_models = [get_model(arch, parameters='standard', freeze=True).eval()
                                          for arch in surrogates_list]
+            else:
+                self.args_dict['label_shift_fails'] = 0
         else:
             self.loss = self.normal_loss
 
@@ -55,6 +57,7 @@ class Attacker:
         if self.args_dict['selective_transfer']:
             self.surrogate_models = self.selective_transfer(image,
                                                             mask,
+                                                            label.item(),
                                                             step,
                                                             self.args_dict['num_iterations']//10+1)
 
@@ -96,7 +99,7 @@ class Attacker:
 
         return best_x.cuda()
 
-    def selective_transfer(self, image, mask, step, num_queries):
+    def selective_transfer(self, image, mask, original_label, step, num_queries):
         model_scores = {}
         model_scores = defaultdict(lambda: 0, model_scores)
         mse_criterion = torch.nn.MSELoss(reduction='none')
@@ -107,6 +110,9 @@ class Attacker:
 
             prediction = predict(self.model, x)[0]
             label = torch.argmax(prediction).item()
+
+            if label == original_label:
+                self.args_dict['label_shift_fails'] += 1
 
             for arch in self.available_surrogates_list:
                 current_model = get_model(arch, 'standard', freeze=True).cuda().eval()
@@ -213,7 +219,7 @@ def main():
         if mask.size != image.size():
             mask = torch.ones_like(image)
 
-        adversarial_example = attacker(image, mask[0], target, False)
+        adversarial_example = attacker(image.cuda(), mask[0].cuda(), target, False)
         adversarial_prediction = predict(model, adversarial_example)
 
         if args_dict['unadversarial'] or args_dict['targeted']:
