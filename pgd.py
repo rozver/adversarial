@@ -59,7 +59,7 @@ class Attacker:
                                                             mask,
                                                             label.item(),
                                                             step,
-                                                            self.args_dict['num_iterations']//10+1)
+                                                            self.args_dict['num_iterations'])
 
         iterations_without_updates = 0
 
