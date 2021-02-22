@@ -1,4 +1,5 @@
 import torch
+from torch.nn import functional as F
 import random
 import torchvision
 from PIL import Image
@@ -21,7 +22,7 @@ def get_transformation_bounds_dict():
         'light': [-0.1, 0.1],
         'noise': [0.0, 0.05],
         'translation': [-10.0, 10.0],
-        'rotation': [-35, 35],
+        'rotation': [-10, 10],
     }
 
     return bounds_dict
@@ -45,8 +46,6 @@ def get_random_transformation():
     transformation_type = random.choice(transformation_types_list)
 
     t = get_transformation(transformation_type)
-    t.set_random_parameter()
-
     return t
 
 
@@ -61,12 +60,18 @@ class Transformation:
         self.algorithm = 1
 
     def __call__(self, x):
-        if self.parameter is None:
-            sys.exit('Transformation parameter is None!')
-        return self.transform(x)
+        if len(x.size()) != 4:
+            x = x.unsqueeze(0)
 
-    def set_random_parameter(self):
-        self.parameter = random.uniform(self.lower_bound, self.upper_bound)
+        if self.parameter is None:
+            self.parameter = [self.get_random_parameter() for i in range(x.size(0))]
+
+        x_transformed = self.transform(x)
+        self.parameter = None
+        return x_transformed
+
+    def get_random_parameter(self):
+        return random.uniform(self.lower_bound, self.upper_bound)
 
     def set_algorithm(self, algorithm):
         self.algorithm = algorithm
@@ -81,8 +86,9 @@ class LightAdjustment(Transformation):
         super(LightAdjustment, self).__init__(transformation_type=self.transformation_type)
 
     def transform(self, x):
-        light = torch.cuda.FloatTensor().new_full(x.size(), self.parameter)
-        x = torch.add(x, light)
+        for index in range(x.size(0)):
+            light = torch.cuda.FloatTensor().new_full(x[index].size(), self.parameter[index])
+            x[index] = torch.add(x[index], light)
         return x
 
 
@@ -92,8 +98,9 @@ class Noise(Transformation):
         super(Noise, self).__init__(transformation_type=self.transformation_type)
 
     def transform(self, x):
-        noise = torch.normal(mean=0.0, std=self.parameter, size=x.size(), device=torch.device('cuda'))
-        x = torch.add(x, noise).float()
+        for index in range(x.size(0)):
+            noise = torch.normal(mean=0.0, std=self.parameter[index], size=x[index].size(), device=torch.device('cuda'))
+            x[index] = torch.add(x[index], noise).float()
         return x
 
 
@@ -102,29 +109,16 @@ class Translation(Transformation):
         self.transformation_type = 'translation'
         super(Translation, self).__init__(transformation_type=self.transformation_type)
 
-    def set_random_parameter(self):
-        self.parameter = (random.uniform(self.lower_bound, self.upper_bound),
-                          random.uniform(self.lower_bound, self.upper_bound))
+    def get_random_parameter(self):
+        return (random.randint(self.lower_bound, self.upper_bound),
+                random.randint(self.lower_bound, self.upper_bound))
 
     def transform(self, x):
-        x = x.permute(1, 2, 0)
+        translation = [parameter for parameter in self.parameter]
 
-        output_tensor = torch.ones(x.size())
-        translation = torch.round(torch.cuda.FloatTensor([parameter for parameter in self.parameter]))
-
-        for row in range(x.size(0)):
-            for column in range(x.size(1)):
-                point_vector = torch.cuda.FloatTensor([row, column])
-
-                new_point_vector = torch.add(point_vector, translation)
-
-                new_row = new_point_vector[0].int().item()
-                new_column = new_point_vector[1].int().item()
-
-                if x.size(0) > new_row >= 0 and 0 <= new_column < x.size(1):
-                    output_tensor[new_row, new_column] = x[row, column]
-
-        return output_tensor.permute(2, 0, 1)
+        for index in range(x.size(0)):
+            x[index] = torch.roll(x[index], shifts=translation[index], dims=(1, 2))
+        return x
 
 
 class Rotation(Transformation):
@@ -133,52 +127,19 @@ class Rotation(Transformation):
         super(Rotation, self).__init__(transformation_type=self.transformation_type)
 
     def transform(self, x):
-        x = x.permute(1, 2, 0)
+        for index in range(x.size(0)):
+            x_t = x[index].clone().unsqueeze(0)
 
-        sin = torch.sin(torch.deg2rad(torch.cuda.FloatTensor([self.parameter])))
-        tan = torch.tan(torch.deg2rad(torch.cuda.FloatTensor([self.parameter/2])))
+            sin = torch.sin(torch.deg2rad(torch.cuda.FloatTensor([self.parameter[index]])))
+            cos = torch.cos(torch.deg2rad(torch.cuda.FloatTensor([self.parameter[index] / 2])))
+            rotation_matrix = torch.tensor([[cos, sin, 0],
+                                           [sin, cos, 0]]).cuda().repeat(x_t.shape[0], 1, 1)
 
-        if self.algorithm == 1:
-            new_dim_rows = x.size(0)
-            new_dim_columns = x.size(1)
-        elif self.algorithm == 2:
-            new_dim_rows = x.size(0) + 100
-            new_dim_columns = x.size(1) + 100
-        else:
-            sys.exit('Unknown rotation type!')
+            grid = F.affine_grid(rotation_matrix, x_t.size(), align_corners=False)
 
-        output_tensor = torch.zeros((new_dim_rows, new_dim_columns, 3)).cuda()
-
-        outer_matrix = torch.cuda.FloatTensor([[1, -tan],
-                                          [0, 1]])
-        inner_matrix = torch.cuda.FloatTensor([[1, 0],
-                                          [sin, 1]])
-
-        first_translation = torch.cuda.FloatTensor([int(-x.size(0) / 2), int(-x.size(1) / 2)])
-        second_translation = torch.cuda.FloatTensor([int(new_dim_rows / 2), int(new_dim_columns / 2)])
-
-        for row in range(x.size(0)):
-            for column in range(x.size(1)):
-                point_vector = torch.cuda.FloatTensor([row, column])
-
-                point_vector = torch.add(point_vector, first_translation)
-
-                point_vector = torch.round(torch.matmul(point_vector, outer_matrix))
-                point_vector = torch.matmul(torch.round(point_vector), inner_matrix)
-                point_vector = torch.matmul(torch.round(point_vector), outer_matrix)
-
-                point_vector = torch.add(point_vector, second_translation)
-
-                new_row = torch.round(point_vector[0]).int().item()
-                new_column = torch.round(point_vector[1]).int().item()
-
-                if self.algorithm == 1:
-                    if x.size(0) > new_row >= 0 and 0 <= new_column < x.size(1):
-                        output_tensor[new_row, new_column] = x[row, column]
-                else:
-                    output_tensor[new_row, new_column] = x[row, column]
-
-        return output_tensor.permute(2, 0, 1)
+            x_t = F.grid_sample(x_t, grid, align_corners=False)
+            x[index] = x_t
+        return x
 
 
 def main():
@@ -192,10 +153,9 @@ def main():
     image = transforms(image)
 
     transformation = get_transformation(args.transformation_type)
-    transformation.set_random_parameter()
     image = transformation(image.cuda())
 
-    plot(image.cpu())
+    plot(image[0].cpu())
 
 
 if __name__ == '__main__':
