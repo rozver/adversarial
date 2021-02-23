@@ -1,4 +1,5 @@
 import torch
+import robustness
 from pgd_attack_steps import LinfStep, L2Step
 from model_utils import ARCHS_LIST, get_model, load_model, predict
 from transformations import get_random_transformation
@@ -36,28 +37,26 @@ class Attacker:
         if args_dict['norm'] == 'l2':
             attack_step = L2Step
 
-        self.criterion = torch.nn.CrossEntropyLoss(reduction='none')
+        self.criterion = torch.nn.CrossEntropyLoss()
         self.optimization_direction = -1 if args_dict['unadversarial'] or args_dict['targeted'] else 1
         self.masks_batch = masks_batch
         self.attack_step = attack_step
 
-    def __call__(self, image, mask, target, random_start=False):
+    def __call__(self, images_batch, masks_batch, targets, random_start=False):
         best_loss = None
         best_x = None
 
-        step = self.attack_step(image, self.args_dict['eps'], self.args_dict['step_size'])
+        step = self.attack_step(images_batch, self.args_dict['eps'], self.args_dict['step_size'])
 
         if random_start:
-            image = step.random_perturb(image, mask)
+            images_batch = step.random_perturb(images_batch, masks_batch)
 
-        label = torch.argmax(target).view(1)
-
-        x = image.clone().detach().requires_grad_(True)
+        x = images_batch.clone().detach().requires_grad_(True)
 
         if self.args_dict['selective_transfer']:
-            self.surrogate_models = self.selective_transfer(image,
-                                                            mask,
-                                                            label.item(),
+            self.surrogate_models = self.selective_transfer(images_batch,
+                                                            masks_batch,
+                                                            targets,
                                                             step,
                                                             self.args_dict['num_iterations'])
 
@@ -67,16 +66,16 @@ class Attacker:
             t = get_random_transformation()
 
             if iterations_without_updates == 10:
-                x = step.random_perturb(image, mask)
+                x = step.random_perturb(images_batch, masks_batch)
 
             x = x.clone().detach().requires_grad_(True)
 
             if self.args_dict['eot']:
-                loss = self.loss(t(x.cuda()), label)
+                loss = self.loss(t(x.cuda()), targets)
             else:
-                loss = self.loss(x.cuda(), label)
+                loss = self.loss(x.cuda(), targets)
 
-            x.register_hook(lambda grad: grad * mask.float())
+            x.register_hook(lambda grad: grad * masks_batch.float())
             loss.backward()
 
             grads = x.grad.detach().clone()
@@ -99,27 +98,27 @@ class Attacker:
 
         return best_x.cuda()
 
-    def selective_transfer(self, image, mask, original_label, step, num_queries):
+    def selective_transfer(self, images_batch, masks_batch, original_labels, step, num_queries):
         model_scores = {}
         model_scores = defaultdict(lambda: 0, model_scores)
-        mse_criterion = torch.nn.MSELoss(reduction='none')
+        mse_criterion = torch.nn.MSELoss(reduction='mean')
+        batch_indices = torch.arange(images_batch.size(0))
 
         for iteration in range(num_queries):
-            x = image.clone().detach().requires_grad_(False)
-            x = step.random_perturb(x, mask)
+            x = images_batch.clone().detach().requires_grad_(False)
+            x = step.random_perturb(x, masks_batch)
 
-            prediction = predict(self.model, x)[0]
-            label = torch.argmax(prediction).item()
+            predictions = predict(self.model, x)
+            labels = torch.argmax(predictions, dim=1)
 
-            if label == original_label:
-                self.args_dict['label_shift_fails'] += 1
+            self.args_dict['label_shift_fails'] += torch.sum(torch.eq(labels, original_labels))
 
             for arch in self.available_surrogates_list:
                 current_model = get_model(arch, 'standard', freeze=True).cuda().eval()
-                current_prediction = predict(current_model, x)[0]
-                current_model.cpu()
+                current_predictions = predict(current_model, x)
 
-                current_loss = mse_criterion(current_prediction[label], prediction[label])
+                current_loss = mse_criterion(current_predictions[batch_indices, labels],
+                                             predictions[batch_indices, labels])
                 model_scores[arch] += current_loss
 
         surrogates_list = [arch
@@ -142,7 +141,6 @@ class Attacker:
         for current_model in self.surrogate_models:
             current_model.cuda()
             prediction = predict(current_model, x)
-            current_model.cpu()
 
             current_loss = self.criterion(prediction, label)
             loss = torch.add(loss, self.optimization_direction * current_loss)
@@ -153,12 +151,12 @@ class Attacker:
 
 def main():
     time = str(get_current_time())
-
     parser = argparse.ArgumentParser()
     parser.add_argument('--arch', type=str, choices=ARCHS_LIST, default='resnet50')
     parser.add_argument('--checkpoint_location', type=str, default=None)
     parser.add_argument('--from_robustness', default=False, action='store_true')
     parser.add_argument('--dataset', type=str, default='dataset/imagenet-airplanes-images.pt')
+    parser.add_argument('--batch_size', type=int, default=2)
     parser.add_argument('--masks', default=False, action='store_true')
     parser.add_argument('--eps', type=float, default=8)
     parser.add_argument('--norm', type=str, choices=['l2', 'linf'], default='linf')
@@ -191,48 +189,40 @@ def main():
 
     attacker = Attacker(model, args_dict)
 
-    target = torch.zeros(1000).cuda()
-    target[TARGET_CLASS] = 1
+    targets = torch.zeros(1000).cuda()
+    targets[TARGET_CLASS] = 1
 
     print('Loading dataset...')
     if args_dict['masks']:
-        dataset = torch.load(args_dict['dataset'])
-        dataset_length = dataset.__len__()
+        loader = torch.load(args_dict['dataset'])
     else:
-        images = torch.load(args_dict['dataset'])
-        masks = [torch.ones_like(images[0]).cuda()] * images.__len__()
-        dataset = zip(images, masks)
-        dataset_length = images.__len__()
-    print('Finished!\n')
+        dataset = robustness.datasets.ImageNet(args_dict['dataset'])
+        loader, _ = dataset.make_loaders(workers=10, batch_size=args_dict['batch_size'])
 
+    print('Finished!\n')
     adversarial_examples_list = []
     predictions_list = []
 
     print('Starting PGD...')
-    for index, (image, mask) in enumerate(dataset):
-        print('Image: ' + str(index + 1) + '/' + str(dataset_length))
-        original_prediction = predict(model, image.cuda())
+    for index, batch in enumerate(loader):
+        if args_dict['masks']:
+            images_batch, masks_batch = batch
+            labels_batch = torch.argmax(predict(model, images_batch.cuda()), dim=1)
+            if masks_batch.size != images_batch.size():
+                masks_batch = torch.ones_like(images_batch)
+        else:
+            images_batch, labels_batch = batch
+            masks_batch = torch.ones_like(images_batch)
 
         if not args_dict['targeted']:
-            target = original_prediction
+            targets = labels_batch
 
-        if mask.size != image.size():
-            mask = torch.ones_like(image)
+        adversarial_examples = attacker(images_batch.cuda(), masks_batch.cuda(), targets.cuda(), False)
+        adversarial_predictions = predict(model, adversarial_examples)
 
-        adversarial_example = attacker(image.cuda(), mask[0].cuda(), target, False)
-        adversarial_prediction = predict(model, adversarial_example)
-
-        if args_dict['unadversarial'] or args_dict['targeted']:
-            expression = torch.argmax(adversarial_prediction) == torch.argmax(target)
-        else:
-            expression = torch.argmax(adversarial_prediction) != torch.argmax(target)
-
-        status = 'Success' if expression else 'Failure'
-        print('Attack status: ' + status + '\n')
-
-        adversarial_examples_list.append(adversarial_example.cpu())
-        predictions_list.append({'original': original_prediction.cpu(),
-                                 'adversarial': adversarial_prediction.cpu()})
+        adversarial_examples_list.append(adversarial_examples.cpu())
+        predictions_list.append({'original': labels_batch.cpu(),
+                                 'adversarial': adversarial_predictions.cpu()})
     print('Finished!')
 
     print('Serializing results...')
