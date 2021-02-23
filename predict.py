@@ -3,7 +3,7 @@ import torch
 import argparse
 from PIL import Image
 from torchvision import transforms
-from model_utils import MODELS_LIST, get_model
+from model_utils import ARCHS_LIST, get_model
 
 
 def predict(x, model, is_tensor=True, use_gpu=False):
@@ -40,13 +40,13 @@ def predict_multiple(images_batch, model, is_tensor=True, use_gpu=False):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--arch', type=str, choices=MODELS_LIST, default='resnet50')
+    parser.add_argument('--arch', type=str, choices=ARCHS_LIST, default='resnet50')
     parser.add_argument('--image', type=str, required=True)
     args_dict = vars(parser.parse_args())
 
     if os.path.exists(args_dict['image']):
         if args_dict['image'].endswith(('png', 'jpg', 'jpeg')):
-            model = get_model(args_dict['arch'], pretrained=True).eval()
+            model = get_model(args_dict['arch'], parameters='standard').eval()
             predicted_class = torch.argmax(predict(args_dict['image'], model, is_tensor=False)).item()
             print(predicted_class)
         else:
