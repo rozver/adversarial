@@ -156,6 +156,7 @@ def main():
     parser.add_argument('--checkpoint_location', type=str, default=None)
     parser.add_argument('--from_robustness', default=False, action='store_true')
     parser.add_argument('--dataset', type=str, default='dataset/imagenet-airplanes-images.pt')
+    parser.add_argument('--num_samples', type=int, default=500)
     parser.add_argument('--batch_size', type=int, default=2)
     parser.add_argument('--masks', default=False, action='store_true')
     parser.add_argument('--eps', type=float, default=8)
@@ -223,6 +224,8 @@ def main():
         adversarial_examples_list.append(adversarial_examples.cpu())
         predictions_list.append({'original': labels_batch.cpu(),
                                  'adversarial': adversarial_predictions.cpu()})
+        if (index+2)*images_batch.size(0)>args_dict['num_samples']:
+            break
     print('Finished!')
 
     print('Serializing results...')
