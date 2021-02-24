@@ -227,7 +227,7 @@ def main():
 
         if (index+2)*images_batch.size(0) > args_dict['num_samples']:
             break
-            
+
     print('Finished!')
 
     print('Serializing results...')
