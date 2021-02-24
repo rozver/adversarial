@@ -224,8 +224,10 @@ def main():
         adversarial_examples_list.append(adversarial_examples.cpu())
         predictions_list.append({'original': labels_batch.cpu(),
                                  'adversarial': adversarial_predictions.cpu()})
-        if (index+2)*images_batch.size(0)>args_dict['num_samples']:
+
+        if (index+2)*images_batch.size(0) > args_dict['num_samples']:
             break
+            
     print('Finished!')
 
     print('Serializing results...')
