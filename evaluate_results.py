@@ -88,11 +88,16 @@ def main():
             results['args_dict']['masks'] = False
 
         for predictions in results['predictions']:
-            original_class = torch.argmax(predictions['original']).item()
-            adversarial_class = torch.argmax(predictions['adversarial']).item()
+            original_classes = predictions['original']
+            if len(original_classes.size()) == 2:
+                original_classes = torch.argmax(original_classes, dim=1)
 
-            if original_class != adversarial_class:
-                successful_attacks += 1
+            adversarial_classes = torch.argmax(predictions['adversarial'], dim=1)
+
+            batch_size = original_classes.size(0)
+            successful_attacks += batch_size - torch.sum(torch.eq(adversarial_classes, original_classes)).item()
+            if results['args_dict']['targeted']:
+                successful_attacks = -successful_attacks-batch_size
 
         success_rate = round(successful_attacks / len(results['predictions']), 2)
         setups_and_results.append(str(results['args_dict']) + '\nAttack success rate: ' +
