@@ -111,7 +111,7 @@ class Attacker:
             predictions = predict(self.model, x)
             labels = torch.argmax(predictions, dim=1)
 
-            self.args_dict['label_shift_fails'] += torch.sum(torch.eq(labels, original_labels))
+            self.args_dict['label_shift_fails'] += torch.sum(torch.eq(labels, original_labels)).item()
 
             for arch in self.available_surrogates_list:
                 current_model = get_model(arch, 'standard', freeze=True).cuda().eval()
