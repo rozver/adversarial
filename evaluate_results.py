@@ -94,12 +94,17 @@ def main():
 
             adversarial_classes = torch.argmax(predictions['adversarial'], dim=1)
 
-            batch_size = original_classes.size(0)
-            successful_attacks += batch_size - torch.sum(torch.eq(adversarial_classes, original_classes)).item()
-            if results['args_dict']['targeted']:
-                successful_attacks = -successful_attacks-batch_size
+            successful_attacks += torch.sum(torch.eq(adversarial_classes, original_classes)).item()
 
-        success_rate = round(successful_attacks / len(results['predictions']), 2)
+        if 'num_samples' in results['args_dict'].keys():
+            num_samples = results['args_dict']['num_samples']
+        else:
+            num_samples = len(results['predictions'])
+
+        if not results['args_dict']['targeted']:
+            successful_attacks = num_samples - successful_attacks
+
+        success_rate = round(successful_attacks / num_samples, 2)
         setups_and_results.append(str(results['args_dict']) + '\nAttack success rate: ' +
                                   str(success_rate) +
                                   '\n')
