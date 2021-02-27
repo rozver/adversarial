@@ -59,6 +59,7 @@ class Attacker:
                                                             targets,
                                                             step,
                                                             self.args_dict['num_iterations'])
+            step.eps = self.args_dict['eps']
 
         iterations_without_updates = 0
 
@@ -103,6 +104,7 @@ class Attacker:
         model_scores = defaultdict(lambda: 0, model_scores)
         mse_criterion = torch.nn.MSELoss(reduction='mean')
         batch_indices = torch.arange(images_batch.size(0))
+        step.eps = 4*step.eps
 
         for iteration in range(num_queries):
             x = images_batch.clone().detach().requires_grad_(False)
