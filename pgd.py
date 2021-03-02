@@ -59,6 +59,7 @@ class Attacker:
                                                             targets,
                                                             step,
                                                             self.args_dict['num_iterations'])
+            step.eps = self.args_dict['eps']
 
         iterations_without_updates = 0
 
@@ -103,6 +104,7 @@ class Attacker:
         model_scores = defaultdict(lambda: 0, model_scores)
         mse_criterion = torch.nn.MSELoss(reduction='mean')
         batch_indices = torch.arange(images_batch.size(0))
+        step.eps = 4*step.eps
 
         for iteration in range(num_queries):
             x = images_batch.clone().detach().requires_grad_(False)
@@ -111,7 +113,7 @@ class Attacker:
             predictions = predict(self.model, x)
             labels = torch.argmax(predictions, dim=1)
 
-            self.args_dict['label_shift_fails'] += torch.sum(torch.eq(labels, original_labels))
+            self.args_dict['label_shift_fails'] += torch.sum(torch.eq(labels, original_labels)).item()
 
             for arch in self.available_surrogates_list:
                 current_model = get_model(arch, 'standard', freeze=True).cuda().eval()
