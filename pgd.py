@@ -110,7 +110,7 @@ class Attacker:
             x = images_batch.clone().detach().requires_grad_(False)
             x = step.random_perturb(x, masks_batch)
 
-            predictions = predict(self.model, x)
+            predictions = predict(self.model, x.cuda())
             labels = torch.argmax(predictions, dim=1)
 
             self.args_dict['label_shift_fails'] += torch.sum(torch.eq(labels, original_labels)).item()
