@@ -57,8 +57,7 @@ class Attacker:
             self.surrogate_models = self.selective_transfer(images_batch,
                                                             masks_batch,
                                                             targets,
-                                                            step,
-                                                            self.args_dict['num_iterations'])
+                                                            step)
             step.eps = self.args_dict['eps']
 
         iterations_without_updates = 0
@@ -99,14 +98,15 @@ class Attacker:
 
         return best_x.cuda()
 
-    def selective_transfer(self, images_batch, masks_batch, original_labels, step, num_queries):
+    def selective_transfer(self, images_batch, masks_batch, original_labels, step):
         model_scores = {}
         model_scores = defaultdict(lambda: 0, model_scores)
         mse_criterion = torch.nn.MSELoss(reduction='mean')
         batch_indices = torch.arange(images_batch.size(0))
+
         step.eps = 5*step.eps
 
-        for iteration in range(num_queries):
+        for iteration in range(self.args_dict['num_iterations']):
             x = images_batch.clone().detach().requires_grad_(False)
             x = step.random_perturb(x, masks_batch)
 
