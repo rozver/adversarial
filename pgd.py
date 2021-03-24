@@ -13,24 +13,78 @@ TARGET_CLASS = 934
 SURROGATES_LIST_ALL = []
 
 
+PARSER_ARGS = [
+                {'name': '--arch', 'type': str, 'choices': ARCHS_LIST, 'default': 'resnet50', 'action': None},
+                {'name': '--checkpoint_location', 'type': str, 'choices': None, 'default': None, 'action': None},
+                {'name': '--from_robustness', 'type': bool, 'choices': None, 'default': False, 'action': 'store_true'},
+                {'name': '--dataset', 'type': str, 'choices': None, 'default': 'dataset/imagenet', 'action': None},
+                {'name': '--num_samples', 'type': int, 'choices': None, 'default': 500, 'action': None},
+                {'name': '--sigma', 'type': int, 'choices': None, 'default': 8, 'action': None},
+                {'name': '--num_transformations', 'type': int, 'choices': None, 'default': 50, 'action': None},
+                {'name': '--batch_size', 'type': int, 'choices': None, 'default': 2, 'action': None},
+                {'name': '--masks', 'type': bool, 'choices': None, 'default': False, 'action': 'store_true'},
+                {'name': '--eps', 'type': int, 'choices': None, 'default': 8, 'action': None},
+                {'name': '--norm', 'type': str, 'choices': ['l2', 'linf'], 'default': 'linf', 'action': None},
+                {'name': '--step_size', 'type': int, 'choices': None, 'default': 1, 'action': None},
+                {'name': '--num_iterations', 'type': int, 'choices': None, 'default': 10, 'action': None},
+                {'name': '--unadversarial', 'type': bool, 'choices': None, 'default': False, 'action': 'store_true'},
+                {'name': '--targeted', 'type': bool, 'choices': None, 'default': False, 'action': 'store_true'},
+                {'name': '--eot', 'type': bool, 'choices': None, 'default': False, 'action': 'store_true'},
+                {'name': '--transfer', 'type': bool, 'choices': None, 'default': False, 'action': 'store_true'},
+                {'name': '--selective', 'type': bool, 'choices': None, 'default': False, 'action': 'store_true'},
+                {'name': '--num_surrogates', 'type': int, 'choices': None, 'default': 5, 'action': None},
+                {'name': '--save_file_location', 'type': int, 'choices': None, 'default': None, 'action': None},
+              ]
+
+
+def get_args_dict():
+    parser = argparse.ArgumentParser()
+    for arg_dict in PARSER_ARGS:
+        if arg_dict['action'] is None:
+            parser.add_argument(arg_dict['name'],
+                                type=arg_dict['type'],
+                                choices=arg_dict['choices'],
+                                default=arg_dict['default'],
+                                action=arg_dict['action'])
+        else:
+            parser.add_argument(arg_dict['name'],
+                                default=arg_dict['default'],
+                                action=arg_dict['action'])
+
+    args_ns = parser.parse_args()
+    args_dict = vars(args_ns)
+    return args_dict
+
+
+def normalize_args_dict(args_dict):
+    time = str(get_current_time())
+    if args_dict['save_file_location'] is None:
+        args_dict['save_file_location'] = 'results/pgd_new_experiments/' + time + '.pt'
+    validate_save_file_location(args_dict['save_file_location'])
+    args_dict['eps'] = args_dict['eps'] / 255.0
+    args_dict['step_size'] = args_dict['step_size'] / 255.0
+    args_dict['sigma'] = args_dict['sigma'] / 255.0
+    return args_dict
+
+
 class Attacker:
     def __init__(self, model, args_dict, attack_step=LinfStep, masks_batch=None):
         self.model = model
         self.args_dict = args_dict
         self.surrogates_list = []
 
-        if args_dict['transfer'] or args_dict['selective_transfer']:
+        if args_dict['transfer']:
             self.loss = self.transfer_loss
             self.available_surrogates_list = copy.copy(ARCHS_LIST)
             self.available_surrogates_list.remove(args_dict['arch'])
 
-            if args_dict['transfer']:
+            if not args_dict['selective']:
                 surrogates_list = random.sample(self.available_surrogates_list, args_dict['num_surrogates'])
                 SURROGATES_LIST_ALL.append(surrogates_list)
                 self.surrogate_models = [get_model(arch, parameters='standard', freeze=True).eval()
                                          for arch in surrogates_list]
             else:
-                self.args_dict['label_shift_fails'] = 0
+                self.args_dict['label_shifts'] = 0
         else:
             self.loss = self.normal_loss
 
@@ -53,7 +107,7 @@ class Attacker:
 
         x = images_batch.clone().detach().requires_grad_(True)
 
-        if self.args_dict['selective_transfer']:
+        if self.args_dict['transfer'] and self.args_dict['selective']:
             self.surrogate_models = self.selective_transfer(images_batch,
                                                             masks_batch,
                                                             targets,
@@ -104,17 +158,16 @@ class Attacker:
         mse_criterion = torch.nn.MSELoss(reduction='mean')
         batch_indices = torch.arange(images_batch.size(0))
 
-        step.eps = 5*step.eps
+        step.eps = self.args_dict['sigma']
 
-        for iteration in range(self.args_dict['num_iterations']):
+        for iteration in range(self.args_dict['num_transformations']):
             x = images_batch.clone().detach().requires_grad_(False)
             x = step.random_perturb(x, masks_batch)
 
             predictions = predict(self.model.cuda(), x.cuda())
-            print(predictions)
             labels = torch.argmax(predictions, dim=1)
 
-            self.args_dict['label_shift_fails'] += torch.sum(torch.eq(labels, original_labels)).item()
+            self.args_dict['label_shifts'] += (len(labels) - torch.sum(torch.eq(labels, original_labels)).item())
 
             for arch in self.available_surrogates_list:
                 current_model = get_model(arch, 'standard', freeze=True).cuda().eval()
@@ -153,33 +206,7 @@ class Attacker:
 
 
 def main():
-    time = str(get_current_time())
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--arch', type=str, choices=ARCHS_LIST, default='resnet50')
-    parser.add_argument('--checkpoint_location', type=str, default=None)
-    parser.add_argument('--from_robustness', default=False, action='store_true')
-    parser.add_argument('--dataset', type=str, default='dataset/imagenet-airplanes-images.pt')
-    parser.add_argument('--num_samples', type=int, default=500)
-    parser.add_argument('--batch_size', type=int, default=2)
-    parser.add_argument('--masks', default=False, action='store_true')
-    parser.add_argument('--eps', type=float, default=8)
-    parser.add_argument('--norm', type=str, choices=['l2', 'linf'], default='linf')
-    parser.add_argument('--step_size', type=float, default=1)
-    parser.add_argument('--num_iterations', type=int, default=10)
-    parser.add_argument('--unadversarial', default=False, action='store_true')
-    parser.add_argument('--targeted', default=False, action='store_true')
-    parser.add_argument('--eot', default=False, action='store_true')
-    parser.add_argument('--transfer', default=False, action='store_true')
-    parser.add_argument('--selective_transfer', default=False, action='store_true')
-    parser.add_argument('--num_surrogates', type=int, choices=range(1, len(ARCHS_LIST)), default=5)
-    parser.add_argument('--save_file_location', type=str, default='results/pgd_new_experiments/pgd-' + time + '.pt')
-    args_ns = parser.parse_args()
-
-    args_dict = vars(args_ns)
-
-    validate_save_file_location(args_dict['save_file_location'])
-
-    args_dict['eps'], args_dict['step_size'] = args_dict['eps'] / 255.0, args_dict['step_size'] / 255.0
+    args_dict = normalize_args_dict(get_args_dict())
 
     print('Running PGD experiment with the following arguments:')
     print(str(args_dict) + '\n')
