@@ -118,6 +118,19 @@ class Translation(Transformation):
 
         for index in range(x.size(0)):
             x[index] = torch.roll(x[index], shifts=translation[index], dims=(1, 2))
+
+            for j in range(3):
+                if translation[0][0] < 0:
+                    x[index, j, translation[index][0]:x.size(2)] = 0
+                else:
+                    x[index, j, 0: translation[index][0]] = 0
+
+                if translation[0][1] < 0:
+                    for i in range(-1, translation[index][1]-1, -1):
+                        x[index, j, :, i] = 0
+                else:
+                    for i in range(translation[index][1]):
+                        x[index, j, :, i] = 0
         return x
 
 
