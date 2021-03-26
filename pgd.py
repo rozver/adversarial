@@ -117,7 +117,6 @@ class Attacker:
         iterations_without_updates = 0
 
         for iteration in range(self.args_dict['num_iterations']):
-            t = get_random_transformation()
 
             if iterations_without_updates == 10:
                 x = step.random_perturb(images_batch, masks_batch)
@@ -125,6 +124,7 @@ class Attacker:
             x = x.clone().detach().requires_grad_(True)
 
             if self.args_dict['eot']:
+                t = get_random_transformation()
                 loss = self.loss(t(x.cuda()), targets)
             else:
                 loss = self.loss(x.cuda(), targets)
