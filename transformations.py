@@ -72,7 +72,7 @@ class Transformation:
         for index in range(len(x)):
             x_chunks_transformed.append(self.transform(x_chunks[index], index))
         x = torch.cat(x_chunks_transformed, 0)
-        
+
         self.parameter = None
         return x
 
@@ -114,28 +114,13 @@ class Translation(Transformation):
         super(Translation, self).__init__(transformation_type=self.transformation_type)
 
     def get_random_parameter(self):
-        return (random.randint(self.lower_bound, self.upper_bound),
+        return (0,
+                random.randint(self.lower_bound, self.upper_bound),
                 random.randint(self.lower_bound, self.upper_bound))
 
     def transform(self, x, index):
-        """
         translation = [parameter for parameter in self.parameter]
-
-        x = torch.roll(x, shifts=translation[index], dims=(1, 2))
-        for j in range(3):
-            if translation[0][0] < 0:
-                x[index, j, translation[index][0]:x.size(2)] = 0
-            else:
-                x[index, j, 0: translation[index][0]] = 0
-
-            if translation[0][1] < 0:
-                for i in range(-1, translation[index][1]-1, -1):
-                    x[index, j, :, i] = 0
-            else:
-                for i in range(translation[index][1]):
-                    x[index, j, :, i] = 0
-        """
-
+        x = torch.roll(x, shifts=translation[index], dims=(0, 1, 2))
         return x
 
 
