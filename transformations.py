@@ -66,9 +66,15 @@ class Transformation:
         if self.parameter is None:
             self.parameter = [self.get_random_parameter() for i in range(x.size(0))]
 
-        x_transformed = self.transform(x)
+        x_chunks = torch.chunk(x, x.size(0), dim=0)
+        x_chunks_transformed = []
+
+        for index in range(len(x)):
+            x_chunks_transformed.append(self.transform(x_chunks[index], index))
+        x = torch.cat(x_chunks_transformed, 0)
+        
         self.parameter = None
-        return x_transformed
+        return x
 
     def get_random_parameter(self):
         return random.uniform(self.lower_bound, self.upper_bound)
@@ -76,7 +82,7 @@ class Transformation:
     def set_algorithm(self, algorithm):
         self.algorithm = algorithm
 
-    def transform(self, x):
+    def transform(self, x, index):
         raise NotImplementedError
 
 
@@ -85,10 +91,9 @@ class LightAdjustment(Transformation):
         self.transformation_type = 'light'
         super(LightAdjustment, self).__init__(transformation_type=self.transformation_type)
 
-    def transform(self, x):
-        for index in range(x.size(0)):
-            light = torch.cuda.FloatTensor().new_full(x[index].size(), self.parameter[index])
-            x[index] = torch.add(x[index], light)
+    def transform(self, x, index):
+        light = torch.cuda.FloatTensor().new_full(x.size(), self.parameter[index])
+        x = torch.add(x, light)
         return x
 
 
@@ -97,10 +102,9 @@ class Noise(Transformation):
         self.transformation_type = 'noise'
         super(Noise, self).__init__(transformation_type=self.transformation_type)
 
-    def transform(self, x):
-        for index in range(x.size(0)):
-            noise = torch.normal(mean=0.0, std=self.parameter[index], size=x[index].size(), device=torch.device('cuda'))
-            x[index] = torch.add(x[index], noise).float()
+    def transform(self, x, index):
+        noise = torch.normal(mean=0.0, std=self.parameter[index], size=x.size(), device=torch.device('cuda'))
+        x = torch.add(x, noise).float()
         return x
 
 
@@ -113,24 +117,25 @@ class Translation(Transformation):
         return (random.randint(self.lower_bound, self.upper_bound),
                 random.randint(self.lower_bound, self.upper_bound))
 
-    def transform(self, x):
+    def transform(self, x, index):
+        """
         translation = [parameter for parameter in self.parameter]
 
-        for index in range(x.size(0)):
-            x[index] = torch.roll(x[index], shifts=translation[index], dims=(1, 2))
+        x = torch.roll(x, shifts=translation[index], dims=(1, 2))
+        for j in range(3):
+            if translation[0][0] < 0:
+                x[index, j, translation[index][0]:x.size(2)] = 0
+            else:
+                x[index, j, 0: translation[index][0]] = 0
 
-            for j in range(3):
-                if translation[0][0] < 0:
-                    x[index, j, translation[index][0]:x.size(2)] = 0
-                else:
-                    x[index, j, 0: translation[index][0]] = 0
+            if translation[0][1] < 0:
+                for i in range(-1, translation[index][1]-1, -1):
+                    x[index, j, :, i] = 0
+            else:
+                for i in range(translation[index][1]):
+                    x[index, j, :, i] = 0
+        """
 
-                if translation[0][1] < 0:
-                    for i in range(-1, translation[index][1]-1, -1):
-                        x[index, j, :, i] = 0
-                else:
-                    for i in range(translation[index][1]):
-                        x[index, j, :, i] = 0
         return x
 
 
@@ -139,19 +144,18 @@ class Rotation(Transformation):
         self.transformation_type = 'rotation'
         super(Rotation, self).__init__(transformation_type=self.transformation_type)
 
-    def transform(self, x):
-        for index in range(x.size(0)):
-            x_t = x[index].clone().unsqueeze(0)
+    def transform(self, x, index):
+        x_t = x.clone()
 
-            sin = torch.sin(torch.deg2rad(torch.cuda.FloatTensor([self.parameter[index]])))
-            cos = torch.cos(torch.deg2rad(torch.cuda.FloatTensor([self.parameter[index] / 2])))
-            rotation_matrix = torch.tensor([[cos, sin, 0],
-                                           [sin, cos, 0]]).cuda().repeat(x_t.shape[0], 1, 1)
+        sin = torch.sin(torch.deg2rad(torch.cuda.FloatTensor([self.parameter[index]])))
+        cos = torch.cos(torch.deg2rad(torch.cuda.FloatTensor([self.parameter[index] / 2])))
+        rotation_matrix = torch.tensor([[cos, sin, 0],
+                                       [sin, cos, 0]]).cuda().repeat(x_t.shape[0], 1, 1)
 
-            grid = F.affine_grid(rotation_matrix, x_t.size(), align_corners=False)
+        grid = F.affine_grid(rotation_matrix, x_t.size(), align_corners=False)
 
-            x_t = F.grid_sample(x_t, grid, align_corners=False)
-            x[index] = x_t
+        x_t = F.grid_sample(x_t, grid, align_corners=False)
+        x = x_t
         return x
 
 
