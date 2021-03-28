@@ -47,8 +47,8 @@ def plot_image(image):
 
 
 def plot(images):
-    if len(images.size() != 3):
-        for i in range(len(images.size(0))):
+    if len(list(images.size())) != 3:
+        for i in range(images.size(0)):
             plot_image(images[i])
     else:
         plot_image(images)
