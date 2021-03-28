@@ -38,6 +38,22 @@ def create_data_loaders(images, labels, batch_size=10, num_workers=4, shuffle=Tr
     return images_loader, labels_loader
 
 
+def plot_image(image):
+    if image.size(0) == 3:
+        plt.imshow(image.cpu().permute(1, 2, 0))
+    else:
+        plt.imshow(image.cpu())
+    plt.show()
+
+
+def plot(images):
+    if len(images.size() != 3):
+        for i in range(len(images.size(0))):
+            plot_image(images[i])
+    else:
+        plot_image(images)
+
+
 def inspect_dataset(dataset):
     matplotlib.use('TkAgg')
     if type(dataset) == str:
