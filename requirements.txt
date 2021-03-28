@@ -3,7 +3,6 @@ torchvision~=0.7.0
 numpy~=1.19.1
 matplotlib~=3.3.2
 robustness~=1.2.1.post2
-Pillow~=7.2.0
 pycocotools~=2.0
 pretrainedmodels~=0.7.4
 pandas~=1.1.1
