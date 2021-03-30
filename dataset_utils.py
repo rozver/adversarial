@@ -1,12 +1,17 @@
-from abc import ABC
 import torch
-import shutil
+import torchvision
+import numpy as np
 from pycocotools.coco import COCO
+import matplotlib
+from matplotlib import pyplot as plt
 from torchvision.transforms import transforms
 from torchvision.utils import save_image
-import numpy as np
-import os
 import datasets
+from model_utils import get_model
+import os
+from abc import ABC
+import shutil
+import json
 
 
 def normalize_names(location):
@@ -33,6 +38,41 @@ def create_data_loaders(images, labels, batch_size=10, num_workers=4, shuffle=Tr
     return images_loader, labels_loader
 
 
+def plot_image(image):
+    if image.size(0) == 3:
+        plt.imshow(image.cpu().permute(1, 2, 0))
+    else:
+        plt.imshow(image.cpu())
+    plt.show()
+
+
+def plot(images):
+    if len(list(images.size())) != 3:
+        for i in range(images.size(0)):
+            plot_image(images[i])
+    else:
+        plot_image(images)
+
+
+def inspect_dataset(dataset):
+    matplotlib.use('TkAgg')
+    if type(dataset) == str:
+        dataset = torch.load(dataset)
+
+    for entry in dataset:
+        if len(entry) == 2:
+            image, mask = entry
+            fig = plt.figure()
+            fig.add_subplot(1, 2, 1)
+            plt.imshow(image.permute(1, 2, 0))
+            fig.add_subplot(1, 2, 2)
+            plt.imshow(mask.permute(1, 2, 0))
+            plt.show()
+        else:
+            plt.imshow(entry.permute(1, 2, 0))
+            plt.show()
+
+
 class Normalizer(torch.nn.Module, ABC):
     def __init__(self, mean, std):
         super(Normalizer, self).__init__()
@@ -44,32 +84,26 @@ class Normalizer(torch.nn.Module, ABC):
 
 
 class ImageNetPreprocessor:
-    def __init__(self, location, model, rgb=True):
+    def __init__(self, location, model, resize=True, rgb=True):
         if os.path.exists(location):
             self.location = location
         else:
             raise ValueError('Invalid dataset location!')
-        self.rgb = rgb
         self.model = model
+        self.resize = resize
+        self.rgb = rgb
         self.dataset_images = None
         self.labels = None
 
     def set_dataset_images(self):
-        if self.rgb:
-            transform = transforms.Compose([
-                transforms.Resize(256),
-                transforms.CenterCrop(224),
-                transforms.ToTensor(),
-            ])
+        transform_list = [transforms.ToTensor()]
+        if self.resize:
+            transform_list.append(transforms.Resize(256))
+            transform_list.append(transforms.CenterCrop(224))
+        if not self.rgb:
+            transform_list.append(transforms.Grayscale(num_output_channels=3))
 
-        else:
-            transform = transforms.Compose([
-                transforms.Resize(256),
-                transforms.CenterCrop(224),
-                transforms.Grayscale(num_output_channels=3),
-                transforms.ToTensor(),
-            ])
-
+        transform = transforms.Compose(transform_list)
         self.dataset_images = datasets.ImageNet(location=self.location, transform=transform)
 
     def set_labels(self):
@@ -92,7 +126,7 @@ class ImageNetPreprocessor:
                 labels = None
                 labels_location = None
 
-            properties_location = self.location+suffix_location
+            properties_location = self.location + suffix_location
             properties_dict = {
                 'images': images_location,
                 'labels': labels_location,
@@ -181,3 +215,49 @@ class CocoCategoryPreprocessor:
         self.export_images_and_masks()
         self.set_dataset()
         self.serialize()
+
+
+def create_adversarial_dataset(results_location):
+    results = torch.load(results_location)
+    dataset = torch.load(results['args_dict']['dataset'])
+    folder_location = 'dataset/adversarial/' + results['args_dict']['save_file_location'].split('/')[-1][:-3]
+    if hasattr(dataset, 'category'):
+        folder_location = os.path.join(folder_location, dataset.category)
+
+    images_location = os.path.join(folder_location, 'images')
+    masks_location = os.path.join(folder_location, 'masks')
+    if not os.path.exists(folder_location):
+        os.makedirs(folder_location)
+        os.makedirs(images_location)
+        if results['args_dict']['masks']:
+            os.makedirs(masks_location)
+
+    for i in range(0, len(results['adversarial_examples'])):
+        adversarial_example = results['adversarial_examples'][i]
+        save_image(adversarial_example, os.path.join(images_location, str(i) + '.png'))
+
+        if results['args_dict']['masks']:
+            _, mask = dataset[i]
+            save_image(mask, os.path.join(masks_location, str(i) + '.png'))
+
+    if results['args_dict']['masks']:
+        transform = torchvision.transforms.ToTensor()
+        parent_directory = os.path.abspath(folder_location + '/../')
+        adversarial_dataset = datasets.CocoCategory(location=parent_directory,
+                                                    category=dataset.category,
+                                                    transform=transform)
+        torch.save(adversarial_dataset, os.path.join(parent_directory, 'images.pt'))
+        with open(os.path.join(parent_directory, 'args_dict.json'), 'w') as file:
+            json.dump(results['args_dict'], file)
+
+    else:
+        model = get_model('resnet50', 'standard').eval()
+        preprocessor = ImageNetPreprocessor(location=images_location,
+                                            model=model,
+                                            resize=False)
+
+        preprocessor.set_dataset_images()
+        adversarial_dataset = preprocessor.dataset_images
+        torch.save(adversarial_dataset, os.path.join(folder_location, 'images.pt'))
+        with open(os.path.join(folder_location, 'args_dict.json'), 'w') as file:
+            json.dump(results['args_dict'], file)

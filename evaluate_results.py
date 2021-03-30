@@ -52,16 +52,16 @@ def save_images(results, results_location, dataset):
     for index, (original_image, adversarial_example) in enumerate(zip(dataset, results['adversarial_examples'])):
         if results['args_dict']['masks']:
             original_image, mask = original_image
-            save_image(mask, (masks_directory + str(index) + '.png'), normalize=True)
+            save_image(mask, (masks_directory + str(index) + '.png'))
 
         if adversarial_example.size() != original_image.size():
             continue
 
         noise = original_image - adversarial_example
 
-        save_image(original_image, (original_directory + str(index) + '.png'), normalize=True)
-        save_image(adversarial_example, (adversarial_directory + str(index) + '.png'), normalize=True)
-        save_image(noise, (noises_directory + str(index) + '.png'), normalize=True)
+        save_image(original_image, (original_directory + str(index) + '.png'))
+        save_image(adversarial_example, (adversarial_directory + str(index) + '.png'))
+        save_image(noise, (noises_directory + str(index) + '.png'))
 
 
 def main():
@@ -88,13 +88,23 @@ def main():
             results['args_dict']['masks'] = False
 
         for predictions in results['predictions']:
-            original_class = torch.argmax(predictions['original']).item()
-            adversarial_class = torch.argmax(predictions['adversarial']).item()
+            original_classes = predictions['original']
+            if len(original_classes.size()) == 2:
+                original_classes = torch.argmax(original_classes, dim=1)
 
-            if original_class != adversarial_class:
-                successful_attacks += 1
+            adversarial_classes = torch.argmax(predictions['adversarial'], dim=1)
 
-        success_rate = round(successful_attacks / len(results['predictions']), 2)
+            successful_attacks += torch.sum(torch.eq(adversarial_classes, original_classes)).item()
+
+        if 'num_samples' in results['args_dict'].keys():
+            num_samples = results['args_dict']['num_samples']
+        else:
+            num_samples = len(results['predictions'])
+
+        if not results['args_dict']['targeted']:
+            successful_attacks = num_samples - successful_attacks
+
+        success_rate = round(successful_attacks / num_samples, 2)
         setups_and_results.append(str(results['args_dict']) + '\nAttack success rate: ' +
                                   str(success_rate) +
                                   '\n')
