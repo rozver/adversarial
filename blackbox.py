@@ -28,9 +28,9 @@ def get_probabilities(model, x, y):
 
 def get_tensor_coordinate_indices(coordinate, size):
     c, coordinate = divmod(coordinate, size[1] * size[2])
-    w, coordinate = divmod(coordinate, size[2])
+    w, h = divmod(coordinate, size[2])
 
-    return c, w, coordinate
+    return c, w, h
 
 
 def simba(model, x, y, args_dict, substitute_model, criterion):
