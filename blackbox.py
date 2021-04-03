@@ -27,13 +27,12 @@ def get_probabilities(model, x, y):
 
 
 def get_tensor_coordinate_indices(coordinate, size):
-    h = coordinate % size[2]
-    coordinate = coordinate // size[2]
-    w = coordinate % size[1]
-    coordinate = coordinate // size[2]
-    c = coordinate % size[0]
+    c = coordinate // (size[1] * size[2])
+    coordinate = coordinate % (size[1] * size[2])
+    w = coordinate // size[2]
+    coordinate = coordinate % size[2]
 
-    return c, w, h
+    return c, w, coordinate
 
 
 def simba(model, x, y, args_dict, substitute_model, criterion):
@@ -98,7 +97,7 @@ def fgsm_grad(image, grad, eps):
     return adversarial_example.detach()
 
 
-def nes(model, image, label, args_dict, *args):
+def nes(model, image, label, args_dict, substitute_model, criterion):
     return fgsm_grad(image, nes_gradient(model, image, label, args_dict), args_dict['eps'])-image
 
 
