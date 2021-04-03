@@ -6,6 +6,15 @@ from gradient_analysis import get_gradient
 from file_utils import validate_save_file_location
 import random
 import argparse
+import math
+
+
+def gaussian_kernel(kernel_length=5, sigma=1.):
+    x = torch.linspace(-sigma, sigma, kernel_length)
+    kernel_1d = torch.exp(-x**2/2.0) / torch.sqrt(torch.Tensor([2*math.pi]))
+    kernel_raw = torch.ger(kernel_1d, kernel_1d)
+    kernel = kernel_raw / kernel_raw.sum()
+    return kernel
 
 
 def get_simba_gradient(model, image, criterion):
