@@ -2,7 +2,7 @@ import torch
 from pgd import Attacker
 from dataset_utils import create_data_loaders, Normalizer
 from model_utils import ARCHS_LIST, predict, get_model, load_model
-from file_utils import validate_save_file_location
+from file_utils import validate_save_file_location, get_current_time
 import argparse
 import os
 
@@ -34,6 +34,8 @@ class Trainer:
             images_loader, labels_loader = create_data_loaders(images, labels, shuffle=True)
 
             for images_batch, labels_batch in zip(images_loader, labels_loader):
+                images_batch, labels_batch = images_batch.cuda(), labels_batch.cuda()
+
                 if self.adversarial:
                     images_batch = self.create_adversarial_examples(images_batch, labels_batch)
 
@@ -41,14 +43,24 @@ class Trainer:
                 predictions = predict(self.model, self.normalize(images_batch.cuda()))
 
                 self.optimizer.zero_grad()
-                loss = self.criterion(predictions, labels_batch.cuda())
+                loss = self.criterion(predictions, labels_batch)
                 loss.backward()
                 self.optimizer.step()
+
+                if self.training_args_dict['weight_averaging']:
+                    with torch.no_grad():
+                        old_parameters = self.model.parameters()
+                        for (name, parameter), old_parameter in zip(self.model.named_parameters(), old_parameters):
+                            if 'weight' in name:
+                                parameter.copy_((parameter + old_parameter) / 2)
+
+                        predictions = predict(self.model, self.normalize(images_batch))
+                        loss = self.criterion(predictions, labels_batch)
 
                 current_loss += loss.item() * images_batch.size(0)
 
             epoch_loss = current_loss / len(images)
-            print('Epoch: {}/{} - Loss: {}'.format(str(epoch+1),
+            print('Epoch: {}/{} - Loss: {}'.format(str(epoch + 1),
                                                    str(self.training_args_dict['epochs']),
                                                    str(epoch_loss)))
 
@@ -56,25 +68,21 @@ class Trainer:
 
     def create_adversarial_examples(self, images_batch, labels_batch):
         if self.attacker is None:
-            self.attacker = Attacker(self.model.cpu().eval(), self.pgd_args_dict)
+            self.attacker = Attacker(self.model.eval(), self.pgd_args_dict)
 
-        self.attacker.model = self.model.cpu().eval()
+        self.attacker.model = self.model.cuda().eval()
 
-        mask = None
-        adversarial_batch = None
+        masks_batch = None
 
-        for image, label in zip(images_batch, labels_batch):
-            if mask is None:
-                mask = torch.ones(image.size())
+        if masks_batch is None:
+            masks_batch = torch.ones_like(images_batch)
 
-            if adversarial_batch is None:
-                adversarial_batch = self.attacker(image=image, mask=mask, target=label, random_start=True).unsqueeze(0)
-                continue
+        adversarial_examples = self.attacker(images_batch,
+                                             masks_batch=masks_batch,
+                                             targets=labels_batch,
+                                             random_start=True)
 
-            adversarial_example = self.attacker(image=image, mask=mask, target=label, random_start=True).unsqueeze(0)
-            adversarial_batch = torch.cat((adversarial_batch, adversarial_example), 0)
-
-        return adversarial_batch
+        return adversarial_examples
 
     def serialize(self):
         torch.save({'state_dict': self.model.state_dict(),
@@ -92,8 +100,9 @@ def main():
     parser.add_argument('--checkpoint_location', type=str, default=None)
     parser.add_argument('--epochs', type=int, default=1)
     parser.add_argument('--learning_rate', type=float, default=1e-2)
+    parser.add_argument('--weight_averaging', default=False, action='store_true')
     parser.add_argument('--adversarial', default=False, action='store_true')
-    parser.add_argument('--save_file_location', type=str, default='models/resnet50_robust.pt')
+    parser.add_argument('--save_file_location', type=str, default='models/' + str(get_current_time()) + 'pt')
     args_dict = vars(parser.parse_args())
 
     validate_save_file_location(args_dict['save_file_location'])
@@ -105,10 +114,11 @@ def main():
             'arch': args_dict['arch'],
             'dataset': dataset_properties['images'],
             'masks': False,
-            'eps': 32/255.0,
+            'eps': 32 / 255.0,
             'norm': 'linf',
-            'step_size': 16/255.0,
+            'step_size': 16 / 255.0,
             'num_iterations': 1,
+            'unadversarial': False,
             'targeted': False,
             'eot': False,
             'transfer': False,
@@ -117,7 +127,7 @@ def main():
         images = torch.load(dataset_properties['images'])
 
         if dataset_properties['labels'] is None:
-            eval_model = get_model(arch=args_dict['arch'],  parameters='standard')
+            eval_model = get_model(arch=args_dict['arch'], parameters='standard')
             normalize = Normalizer(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
             labels = [torch.argmax(eval_model(normalize(x.unsqueeze(0)))) for x in images]
         else:

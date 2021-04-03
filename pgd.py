@@ -186,19 +186,19 @@ class Attacker:
                             for arch in surrogates_list]
         return surrogate_models
 
-    def normal_loss(self, x, label):
-        prediction = predict(self.model, x)
-        loss = self.optimization_direction * self.criterion(prediction, label)
+    def normal_loss(self, x, labels):
+        predictions = predict(self.model, x)
+        loss = self.optimization_direction * self.criterion(predictions, labels)
         return loss
 
-    def transfer_loss(self, x, label):
+    def transfer_loss(self, x, labels):
         loss = torch.zeros([1]).cuda()
 
         for current_model in self.surrogate_models:
             current_model.cuda()
-            prediction = predict(current_model, x)
+            predictions = predict(current_model, x)
 
-            current_loss = self.criterion(prediction, label)
+            current_loss = self.criterion(predictions, labels)
             loss = torch.add(loss, self.optimization_direction * current_loss)
 
         loss = loss / len(self.surrogate_models)

@@ -2,17 +2,28 @@ import torch
 from torch.nn.functional import softmax
 from model_utils import ARCHS_LIST, predict, get_model
 from pgd import get_current_time
-from gradient_analysis import get_gradient, normalize_grad, get_sorted_order
+from gradient_analysis import get_gradient
 from file_utils import validate_save_file_location
+import random
 import argparse
+import math
+
+
+def gaussian_kernel(kernel_length=5, sigma=1.):
+    x = torch.linspace(-sigma, sigma, kernel_length)
+    kernel_1d = torch.exp(-x**2/2.0) / torch.sqrt(torch.Tensor([2*math.pi]))
+    kernel_raw = torch.ger(kernel_1d, kernel_1d)
+    kernel = kernel_raw / kernel_raw.sum()
+    return kernel
 
 
 def get_simba_gradient(model, image, criterion):
     prediction = predict(model, image.unsqueeze(0).cuda())
     label = torch.argmax(prediction).unsqueeze(0)
     grad = get_gradient(model, image, label, criterion)
-    grad_normalized = normalize_grad(grad)
-    return grad_normalized
+    grad_vector = torch.flatten(grad)
+    grad_normalized = softmax(torch.abs(grad_vector), dim=0)
+    return grad_normalized.tolist()
 
 
 def get_probabilities(model, x, y):
@@ -24,37 +35,48 @@ def get_probabilities(model, x, y):
     return prediction_softmax_y
 
 
-def get_tensor_pixel_indices(pixel, size):
-    h = pixel % size[2]
-    pixel = pixel // size[2]
-    w = pixel % size[1]
-    pixel = pixel // size[2]
-    c = pixel % size[0]
+def get_tensor_coordinate_indices(coordinate, size):
+    c, coordinate = divmod(coordinate, size[1] * size[2])
+    w, h = divmod(coordinate, size[2])
 
     return c, w, h
 
 
-def simba_pixels(model, x, y, args_dict, g):
-    eps = args_dict['eps']
-    n = args_dict['num_iterations']
-    delta = torch.zeros(x.size()).cuda()
-    q = torch.zeros(x.size()).cuda()
+def simba(model, x, y, args_dict, substitute_model, criterion):
+    delta = torch.zeros_like(x).cuda()
+    q = torch.zeros_like(x).cuda()
 
     p = get_probabilities(model, x, y)
 
-    if args_dict['gradient_masks']:
-        order = get_sorted_order(g, n)
+    if not args_dict['gradient_masks']:
+        perm = torch.randperm(x.size().numel()).tolist()
     else:
-        order = torch.randperm(x.size(0) * x.size(1) * x.size(2))
+        perm = range(0, x.size().numel())
 
-    for iteration, pixel in enumerate(order):
-        if iteration == n:
-            break
-        c, w, h = get_tensor_pixel_indices(pixel, x.size())
+    for iteration in range(args_dict['num_iterations']):
+        if args_dict['gradient_masks']:
+            distribution = get_simba_gradient(substitute_model, x + delta, criterion)
+            coordinate = random.choices(perm, distribution)[0]
+        else:
+            coordinate = perm[iteration]
 
-        delta[0, w, h] = 1-x[0, w, h]
-        delta[1, w, h] = - x[1, w, h]
-        delta[2, w, h] = -x[2, w, h]
+        c, w, h = get_tensor_coordinate_indices(coordinate, x.size())
+
+        q[c, w, h] = 1
+
+        p_prim_left = get_probabilities(model, (x + delta + args_dict['eps'] * q).clamp(0, 1), y)
+
+        if p_prim_left < p:
+            delta = delta + args_dict['eps'] * q
+            p = p_prim_left
+
+        else:
+            p_prim_right = get_probabilities(model, (x + delta - args_dict['eps'] * q).clamp(0, 1), y)
+            if p_prim_right < p:
+                delta = delta + args_dict['eps'] * q
+                p = p_prim_left
+
+        q[c, w, h] = 0
 
     return delta
 
@@ -82,13 +104,16 @@ def fgsm_grad(image, grad, eps):
     return adversarial_example.detach()
 
 
+def nes(model, image, label, args_dict, substitute_model, criterion):
+    return fgsm_grad(image, nes_gradient(model, image, label, args_dict), args_dict['eps'])-image
+
+
 def main():
     time = get_current_time()
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', type=str, choices=ARCHS_LIST, default='resnet50')
     parser.add_argument('--dataset', type=str, default='dataset/imagenet-airplanes-images.pt')
-    parser.add_argument('--masks', default=False, action='store_true')
     parser.add_argument('--gradient_masks', default=False, action='store_true')
     parser.add_argument('--attack_type', type=str, choices=['nes', 'simba'], default='simba')
     parser.add_argument('--gradient_model', type=str, choices=ARCHS_LIST, default='resnet50')
@@ -100,40 +125,29 @@ def main():
     validate_save_file_location(args_dict['save_file_location'])
 
     model = get_model(args_dict['model'], parameters='standard').cuda().eval()
-    criterion = torch.nn.CrossEntropyLoss(reduction='none')
 
-    if args_dict['masks']:
-        dataset = torch.load(args_dict['dataset'])
-    else:
-        images = torch.load(args_dict['dataset'])
-        if args_dict['gradient_masks']:
-            masks = [get_simba_gradient(model, image, criterion) for image in images]
-        else:
-            masks = [torch.ones(images[0].size())]*images.__len__()
-
-        dataset = zip(images, masks)
+    dataset = torch.load(args_dict['dataset'])
 
     adversarial_examples_list = []
     predictions_list = []
-    model_grad = get_model(args_dict['gradient_model'], parameters='standard').cuda().eval()
-    criterion = torch.nn.CrossEntropyLoss(reduction='none')
+    substitute_model, criterion = None, None
 
-    for index, (image, mask) in enumerate(dataset):
+    if args_dict['attack_type'] == 'nes':
+        attack = nes
+    else:
+        attack = simba
+        if args_dict['gradient_masks']:
+            criterion = torch.nn.CrossEntropyLoss(reduction='none')
+            substitute_model = get_model(args_dict['gradient_model'], parameters='standard').cuda().eval()
+
+    for index, image in enumerate(dataset):
         with torch.no_grad():
             original_prediction = predict(model, image.cuda().unsqueeze(0))
         label = torch.argmax(original_prediction)
 
-        if args_dict['gradient_masks']:
-            label_grad = torch.argmax(model_grad(image.cuda().unsqueeze(0))).unsqueeze(0)
-            mask = get_gradient(model_grad, image.cuda(), label_grad, criterion)
+        delta = attack(model, image.cuda(), label.cuda(), args_dict, substitute_model, criterion)
+        adversarial_example = (image.cuda() + delta).clamp(0, 1)
 
-        if args_dict['attack_type'] == 'nes':
-            grad = nes_gradient(model, image.cuda(), label, args_dict)
-            adversarial_example = fgsm_grad(image.cuda(), grad, args_dict['eps'])
-        else:
-            delta = simba_pixels(model, image.cuda(), label.cuda(), args_dict, mask.cuda())
-            adversarial_example = (image.cuda() + delta).clamp(0, 1)
-            
         with torch.no_grad():
             adversarial_prediction = predict(model, adversarial_example.unsqueeze(0))
 
