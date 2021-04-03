@@ -98,7 +98,7 @@ def fgsm_grad(image, grad, eps):
     return adversarial_example.detach()
 
 
-def nes(model, image, label, args_dict, substitute_model, criterion):
+def nes(model, image, label, args_dict, *args):
     return fgsm_grad(image, nes_gradient(model, image, label, args_dict), args_dict['eps'])-image
 
 
