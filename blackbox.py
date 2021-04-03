@@ -27,8 +27,9 @@ def get_probabilities(model, x, y):
 
 
 def get_tensor_coordinate_indices(coordinate, size):
-    c = coordinate // (size[1] * size[2])
-    coordinate = coordinate % (size[1] * size[2])
+    rect_area = size[1]*size[2]
+    c = coordinate // rect_area
+    coordinate = coordinate % rect_area
     w = coordinate // size[2]
     coordinate = coordinate % size[2]
 
