@@ -2,7 +2,7 @@ import torch
 from pgd import Attacker
 from dataset_utils import create_data_loaders, Normalizer
 from model_utils import ARCHS_LIST, predict, get_model, load_model
-from file_utils import validate_save_file_location
+from file_utils import validate_save_file_location, get_current_time
 import argparse
 import os
 
@@ -102,7 +102,7 @@ def main():
     parser.add_argument('--learning_rate', type=float, default=1e-2)
     parser.add_argument('--weight_averaging', default=False, action='store_true')
     parser.add_argument('--adversarial', default=False, action='store_true')
-    parser.add_argument('--save_file_location', type=str, default='models/resnet50_robust.pt')
+    parser.add_argument('--save_file_location', type=str, default='models/' + str(get_current_time()) + 'pt')
     args_dict = vars(parser.parse_args())
 
     validate_save_file_location(args_dict['save_file_location'])
