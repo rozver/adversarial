@@ -25,7 +25,7 @@ PARSER_ARGS = [
                 {'name': '--masks', 'type': bool, 'choices': None, 'default': False, 'action': 'store_true'},
                 {'name': '--eps', 'type': float, 'choices': None, 'default': 8, 'action': None},
                 {'name': '--norm', 'type': str, 'choices': ['l2', 'linf'], 'default': 'linf', 'action': None},
-                {'name': '--step_size', 'type': float, 'choices': None, 'default': 1, 'action': None},
+                {'name': '--`step_size`', 'type': float, 'choices': None, 'default': 1, 'action': None},
                 {'name': '--num_iterations', 'type': int, 'choices': None, 'default': 10, 'action': None},
                 {'name': '--unadversarial', 'type': bool, 'choices': None, 'default': False, 'action': 'store_true'},
                 {'name': '--targeted', 'type': bool, 'choices': None, 'default': False, 'action': 'store_true'},
@@ -120,7 +120,7 @@ class Attacker:
 
         for iteration in range(self.args_dict['num_iterations']):
 
-            if iterations_without_updates == 10:
+            if iterations_without_updates == int((self.args_dict['eps'] / self.args_dict['step_size'])*1.25):
                 x = step.random_perturb(images_batch, masks_batch)
 
             x = x.clone().detach().requires_grad_(True)
