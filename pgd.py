@@ -228,9 +228,6 @@ def main():
 
     attacker = Attacker(model, args_dict)
 
-    targets = torch.zeros(1000).cuda()
-    targets[TARGET_CLASS] = 1
-
     print('Loading dataset...')
     if args_dict['masks']:
         loader = torch.load(args_dict['dataset'])
@@ -255,6 +252,8 @@ def main():
 
         if not args_dict['targeted']:
             targets = labels_batch
+        else:
+            targets = TARGET_CLASS*torch.ones_like(labels_batch)
 
         adversarial_examples = attacker(images_batch.cuda(), masks_batch.cuda(), targets.cuda(), False)
         adversarial_predictions = predict(model, adversarial_examples)
