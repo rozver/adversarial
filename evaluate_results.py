@@ -6,11 +6,14 @@ from matplotlib import pyplot as plt
 
 ARGS_DICT_KEYS_PGD = ['arch', 'checkpoint_location', 'from_robustness', 'dataset', 'masks', 'eps', 'norm',
                       'step_size', 'num_iterations', 'targeted', 'eot', 'transfer', 'save_file_location']
-ARGS_DICT_KEYS_BLACKBOX = ['model', 'dataset', 'masks', 'gradient_masks', 'attack_type',
+ARGS_DICT_KEYS_BLACKBOX = ['model', 'dataset', 'gradient_masks', 'attack_type',
                            'gradient_model', 'eps', 'num_iterations', 'save_file_location']
 
 
 def has_wrong_args(results, results_location):
+    if 'args' in results.keys():
+        results['args_dict'] = results['args']
+
     if 'args_dict' not in results.keys():
         print('File ' + results_location + ' does not have dictionary key args_dict')
         return True
@@ -86,15 +89,16 @@ def main():
 
             adversarial_classes = torch.argmax(predictions['adversarial'], dim=1)
 
-            successful_attacks += torch.sum(torch.eq(adversarial_classes, original_classes)).item()
+            successful_attacks += torch.sum(~torch.eq(adversarial_classes, original_classes)).item()
 
         if 'num_samples' in results['args_dict'].keys():
             num_samples = results['args_dict']['num_samples']
         else:
             num_samples = len(results['predictions'])
 
-        if not results['args_dict']['targeted']:
-            successful_attacks = num_samples - successful_attacks
+        if 'targeted' in results['args_dict']:
+            if results['args_dict']['targeted']:
+                successful_attacks = num_samples - successful_attacks
 
         success_rate = round(successful_attacks / num_samples, 2)
         setups_and_results.append(str(results['args_dict']) + '\nAttack success rate: ' +
