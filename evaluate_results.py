@@ -79,9 +79,6 @@ def main():
         if 'blackbox' in results['args_dict']['save_file_location']:
             results['args_dict']['masks'] = False
 
-        if 'batch_size' not in results['args_dict']:
-            results['args_dict']['batch_size'] = 1
-
         for predictions in results['predictions']:
             original_classes = predictions['original']
             if len(original_classes.size()) == 2:
@@ -107,6 +104,9 @@ def main():
         if args_dict['save_images']:
             save_original = False
             if os.path.exists(results['args_dict']['dataset']):
+                if 'batch_size' not in results['args_dict']:
+                    results['args_dict']['batch_size'] = 1
+                    
                 dataset = torch.load(results['args_dict']['dataset'])
                 dataset = torch.utils.data.DataLoader(dataset,
                                                       batch_size=results['args_dict']['batch_size'],
