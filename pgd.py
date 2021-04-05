@@ -23,9 +23,9 @@ PARSER_ARGS = [
                 {'name': '--num_transformations', 'type': int, 'choices': None, 'default': 50, 'action': None},
                 {'name': '--batch_size', 'type': int, 'choices': None, 'default': 2, 'action': None},
                 {'name': '--masks', 'type': bool, 'choices': None, 'default': False, 'action': 'store_true'},
-                {'name': '--eps', 'type': int, 'choices': None, 'default': 8, 'action': None},
+                {'name': '--eps', 'type': float, 'choices': None, 'default': 8, 'action': None},
                 {'name': '--norm', 'type': str, 'choices': ['l2', 'linf'], 'default': 'linf', 'action': None},
-                {'name': '--step_size', 'type': int, 'choices': None, 'default': 1, 'action': None},
+                {'name': '--step_size', 'type': float, 'choices': None, 'default': 1, 'action': None},
                 {'name': '--num_iterations', 'type': int, 'choices': None, 'default': 10, 'action': None},
                 {'name': '--unadversarial', 'type': bool, 'choices': None, 'default': False, 'action': 'store_true'},
                 {'name': '--targeted', 'type': bool, 'choices': None, 'default': False, 'action': 'store_true'},
@@ -61,7 +61,9 @@ def normalize_args_dict(args_dict):
     if args_dict['save_file_location'] is None:
         args_dict['save_file_location'] = 'results/pgd_new_experiments/' + time + '.pt'
     validate_save_file_location(args_dict['save_file_location'])
-    args_dict['eps'] = args_dict['eps'] / 255.0
+
+    if args_dict['norm'] == 'linf':
+        args_dict['eps'] = args_dict['eps'] / 255.0
     args_dict['step_size'] = args_dict['step_size'] / 255.0
     args_dict['sigma'] = args_dict['sigma'] / 255.0
     return args_dict
