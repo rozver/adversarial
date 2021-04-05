@@ -9,8 +9,8 @@ import argparse
 import math
 
 
-def gaussian_kernel(kernel_length=5, sigma=1.):
-    x = torch.linspace(-sigma, sigma, kernel_length)
+def gaussian_kernel(kernel_len=5, sigma=1.):
+    x = torch.linspace(-sigma, sigma, kernel_len)
     kernel_1d = torch.exp(-x**2/2.0) / torch.sqrt(torch.Tensor([2*math.pi]))
     kernel_raw = torch.ger(kernel_1d, kernel_1d)
     kernel = kernel_raw / kernel_raw.sum()
@@ -22,6 +22,10 @@ def get_simba_gradient(model, image, criterion):
     label = torch.argmax(prediction).unsqueeze(0)
     grad = get_gradient(model, image, label, criterion)
     grad_vector = torch.flatten(grad)
+    return grad_vector
+
+
+def normalize_gradient_vector(grad_vector):
     grad_normalized = softmax(torch.abs(grad_vector), dim=0)
     return grad_normalized.tolist()
 
@@ -45,6 +49,7 @@ def get_tensor_coordinate_indices(coordinate, size):
 def simba(model, x, y, args_dict, substitute_model, criterion):
     delta = torch.zeros_like(x).cuda()
     q = torch.zeros_like(x).cuda()
+    available_coordinates = None
 
     p = get_probabilities(model, x, y)
 
@@ -52,11 +57,14 @@ def simba(model, x, y, args_dict, substitute_model, criterion):
         perm = torch.randperm(x.size().numel()).tolist()
     else:
         perm = range(0, x.size().numel())
+        available_coordinates = torch.ones(x.size().numel())
 
     for iteration in range(args_dict['num_iterations']):
         if args_dict['gradient_masks']:
             distribution = get_simba_gradient(substitute_model, x + delta, criterion)
-            coordinate = random.choices(perm, distribution)[0]
+            distribution_normalized = normalize_gradient_vector(distribution*available_coordinates)
+            coordinate = random.choices(perm, distribution_normalized)[0]
+            available_coordinates[coordinate] = 0
         else:
             coordinate = perm[iteration]
 
@@ -116,7 +124,7 @@ def main():
     parser.add_argument('--dataset', type=str, default='dataset/imagenet-airplanes-images.pt')
     parser.add_argument('--gradient_masks', default=False, action='store_true')
     parser.add_argument('--attack_type', type=str, choices=['nes', 'simba'], default='simba')
-    parser.add_argument('--gradient_model', type=str, choices=ARCHS_LIST, default='resnet50')
+    parser.add_argument('--gradient_model', type=str, choices=ARCHS_LIST, default='resnet152')
     parser.add_argument('--eps', type=float, default=10)
     parser.add_argument('--num_iterations', type=int, default=1)
     parser.add_argument('--save_file_location', type=str, default='results/blackbox/' + time + '.pt')
@@ -143,7 +151,9 @@ def main():
     for index, image in enumerate(dataset):
         with torch.no_grad():
             original_prediction = predict(model, image.cuda().unsqueeze(0))
-        label = torch.argmax(original_prediction)
+        label = torch.argmax(original_prediction, dim=1)
+
+        criterion = torch.nn.CrossEntropyLoss(reduction='none')
 
         delta = attack(model, image.cuda(), label.cuda(), args_dict, substitute_model, criterion)
         adversarial_example = (image.cuda() + delta).clamp(0, 1)
@@ -157,7 +167,7 @@ def main():
 
     torch.save({'adversarial_examples': adversarial_examples_list,
                 'predictions': predictions_list,
-                'args': args_dict},
+                'args_dict': args_dict},
                args_dict['save_file_location'])
 
 
