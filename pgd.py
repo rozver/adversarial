@@ -10,32 +10,31 @@ import random
 import copy
 
 TARGET_CLASS = 934
-SURROGATES_COEFFS = {}
-
+SIMILARITY_COEFFS = {}
 
 PARSER_ARGS = [
-                {'name': '--arch', 'type': str, 'choices': ARCHS_LIST, 'default': 'resnet50', 'action': None},
-                {'name': '--checkpoint_location', 'type': str, 'choices': None, 'default': None, 'action': None},
-                {'name': '--from_robustness', 'default': False, 'action': 'store_true'},
-                {'name': '--dataset', 'type': str, 'choices': None, 'default': 'dataset/imagenet', 'action': None},
-                {'name': '--num_samples', 'type': int, 'choices': None, 'default': 500, 'action': None},
-                {'name': '--sigma', 'type': int, 'choices': None, 'default': 8, 'action': None},
-                {'name': '--num_transformations', 'type': int, 'choices': None, 'default': 50, 'action': None},
-                {'name': '--batch_size', 'type': int, 'choices': None, 'default': 2, 'action': None},
-                {'name': '--masks', 'default': False, 'action': 'store_true'},
-                {'name': '--eps', 'type': float, 'choices': None, 'default': 8, 'action': None},
-                {'name': '--norm', 'type': str, 'choices': ['l2', 'linf'], 'default': 'linf', 'action': None},
-                {'name': '--step_size', 'type': float, 'choices': None, 'default': 1, 'action': None},
-                {'name': '--num_iterations', 'type': int, 'choices': None, 'default': 10, 'action': None},
-                {'name': '--unadversarial', 'default': False, 'action': 'store_true'},
-                {'name': '--targeted', 'default': False, 'action': 'store_true'},
-                {'name': '--eot', 'default': False, 'action': 'store_true'},
-                {'name': '--transfer', 'default': False, 'action': 'store_true'},
-                {'name': '--selective', 'default': False, 'action': 'store_true'},
-                {'name': '--surrogates_coeffs', 'default': False, 'action': 'store_true'},
-                {'name': '--num_surrogates', 'type': int, 'choices': None, 'default': 5, 'action': None},
-                {'name': '--save_file_location', 'type': int, 'choices': None, 'default': None, 'action': None},
-            ]
+    {'name': '--arch', 'type': str, 'choices': ARCHS_LIST, 'default': 'resnet50', 'action': None},
+    {'name': '--checkpoint_location', 'type': str, 'choices': None, 'default': None, 'action': None},
+    {'name': '--from_robustness', 'default': False, 'action': 'store_true'},
+    {'name': '--dataset', 'type': str, 'choices': None, 'default': 'dataset/imagenet', 'action': None},
+    {'name': '--num_samples', 'type': int, 'choices': None, 'default': 500, 'action': None},
+    {'name': '--sigma', 'type': int, 'choices': None, 'default': 8, 'action': None},
+    {'name': '--num_transformations', 'type': int, 'choices': None, 'default': 50, 'action': None},
+    {'name': '--batch_size', 'type': int, 'choices': None, 'default': 2, 'action': None},
+    {'name': '--masks', 'default': False, 'action': 'store_true'},
+    {'name': '--eps', 'type': float, 'choices': None, 'default': 8, 'action': None},
+    {'name': '--norm', 'type': str, 'choices': ['l2', 'linf'], 'default': 'linf', 'action': None},
+    {'name': '--step_size', 'type': float, 'choices': None, 'default': 1, 'action': None},
+    {'name': '--num_iterations', 'type': int, 'choices': None, 'default': 10, 'action': None},
+    {'name': '--unadversarial', 'default': False, 'action': 'store_true'},
+    {'name': '--targeted', 'default': False, 'action': 'store_true'},
+    {'name': '--eot', 'default': False, 'action': 'store_true'},
+    {'name': '--transfer', 'default': False, 'action': 'store_true'},
+    {'name': '--selective', 'default': False, 'action': 'store_true'},
+    {'name': '--similarity_coeffs', 'default': False, 'action': 'store_true'},
+    {'name': '--num_surrogates', 'type': int, 'choices': None, 'default': 5, 'action': None},
+    {'name': '--save_file_location', 'type': int, 'choices': None, 'default': None, 'action': None},
+]
 
 
 def get_args_dict():
@@ -69,7 +68,7 @@ def normalize_args_dict(args_dict):
     args_dict['sigma'] = args_dict['sigma'] / 255.0
 
     if args_dict['norm'] == 'linf':
-        args_dict['restart_iterations'] = int((args_dict['eps'] / args_dict['step_size'])*1.25)
+        args_dict['restart_iterations'] = int((args_dict['eps'] / args_dict['step_size']) * 1.25)
     else:
         args_dict['restart_iterations'] = 10
 
@@ -80,7 +79,6 @@ class Attacker:
     def __init__(self, model, args_dict, attack_step=LinfStep, masks_batch=None):
         self.model = model
         self.args_dict = args_dict
-        self.surrogates_list = []
 
         if args_dict['transfer']:
             self.loss = self.transfer_loss
@@ -89,8 +87,8 @@ class Attacker:
 
             if not args_dict['selective']:
                 surrogates_list = random.sample(self.available_surrogates_list, args_dict['num_surrogates'])
-                coeffs = [1/len(surrogates_list)]*len(surrogates_list)
-                SURROGATES_COEFFS.update(dict(zip(surrogates_list, coeffs)))
+                coeffs = [1 / len(surrogates_list)] * len(surrogates_list)
+                SIMILARITY_COEFFS.update(dict(zip(surrogates_list, coeffs)))
                 self.surrogate_models = [get_model(arch, parameters='standard', freeze=True).eval()
                                          for arch in surrogates_list]
             else:
@@ -190,13 +188,13 @@ class Attacker:
                            for arch in sorted(model_scores, key=model_scores.get)
                            [:self.args_dict['num_surrogates']]]
 
-        if self.args_dict['surrogate_coeffs']:
-            scores = torch.FloatTensor([model_scores[arch] for arch in model_scores.keys()])
-            coeffs = torch.nn.functional.softmax(scores, dim=0).tolist()
+        if self.args_dict['similarity_coeffs']:
+            scores_reversed = torch.FloatTensor([model_scores[arch] for arch in surrogates_list][::-1])
+            similarity_coeffs = torch.nn.functional.softmax(scores_reversed, dim=0).tolist()
         else:
-            coeffs = [1/len(surrogates_list)]*len(surrogates_list)
+            similarity_coeffs = [1 / len(surrogates_list)] * len(surrogates_list)
 
-        SURROGATES_COEFFS.update(dict(zip(surrogates_list, coeffs)))
+        SIMILARITY_COEFFS.update(dict(zip(surrogates_list, similarity_coeffs)))
 
         surrogate_models = [get_model(arch, parameters='standard', freeze=True).eval()
                             for arch in surrogates_list]
@@ -210,14 +208,13 @@ class Attacker:
     def transfer_loss(self, x, labels):
         loss = torch.zeros([1]).cuda()
 
-        for current_model in self.surrogate_models:
+        for arch, current_model in zip(SIMILARITY_COEFFS.keys(), self.surrogate_models):
             current_model.cuda()
             predictions = predict(current_model, x)
 
             current_loss = self.criterion(predictions, labels)
-            loss = torch.add(loss, self.optimization_direction * current_loss)
+            loss = torch.add(loss, self.optimization_direction * SIMILARITY_COEFFS[arch] * current_loss)
 
-        loss = loss / len(self.surrogate_models)
         return loss
 
 
@@ -261,7 +258,7 @@ def main():
         if not args_dict['targeted']:
             targets = labels_batch
         else:
-            targets = TARGET_CLASS*torch.ones_like(labels_batch)
+            targets = TARGET_CLASS * torch.ones_like(labels_batch)
 
         adversarial_examples = attacker(images_batch.cuda(), masks_batch.cuda(), targets.cuda(), False)
         adversarial_predictions = predict(model, adversarial_examples)
@@ -270,7 +267,7 @@ def main():
         predictions_list.append({'original': labels_batch.cpu(),
                                  'adversarial': adversarial_predictions.cpu()})
 
-        if (index+2)*images_batch.size(0) > args_dict['num_samples']:
+        if (index + 2) * images_batch.size(0) > args_dict['num_samples']:
             break
 
     print('Finished!')
@@ -278,7 +275,7 @@ def main():
     print('Serializing results...')
     torch.save({'adversarial_examples': adversarial_examples_list,
                 'predictions': predictions_list,
-                'surrogates_data': SURROGATES_COEFFS,
+                'surrogates_data': SIMILARITY_COEFFS,
                 'args_dict': args_dict},
                args_dict['save_file_location'])
     print('Finished!\n')
