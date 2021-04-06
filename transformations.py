@@ -105,8 +105,8 @@ class Noise(Transformation):
 
 
 def gaussian_kernel(kernel_length, sigma=1.):
-    x = torch.linspace(-sigma, sigma, kernel_length)
-    kernel_1d = torch.exp(-x ** 2 / 2.0) / torch.sqrt(torch.Tensor([2 * math.pi]))
+    x = torch.linspace(-sigma, sigma, kernel_length).cuda()
+    kernel_1d = torch.exp(-x ** 2 / 2.0) / torch.sqrt(torch.Tensor([2 * math.pi]).cuda())
     kernel_raw = torch.ger(kernel_1d, kernel_1d)
     kernel = kernel_raw / kernel_raw.sum()
     return kernel
