@@ -3,6 +3,7 @@ from torch.nn.functional import softmax
 from model_utils import ARCHS_LIST, predict, get_model
 from pgd import get_current_time
 from gradient_analysis import get_gradient
+from transformations import Blur
 from file_utils import validate_save_file_location
 import random
 import argparse
@@ -41,6 +42,8 @@ def simba(model, x, y, args_dict, substitute_model, criterion):
     delta = torch.zeros_like(x).cuda()
     q = torch.zeros_like(x).cuda()
     available_coordinates = None
+    conv = Blur()
+    conv.parameters = [(9, 3)]
 
     p = get_probabilities(model, x, y)
 
@@ -63,6 +66,9 @@ def simba(model, x, y, args_dict, substitute_model, criterion):
 
         q[c, w, h] = 1
 
+        if args_dict['conv']:
+            q = conv(q)[0]
+
         p_prim_left = get_probabilities(model, (x + delta + args_dict['eps'] * q).clamp(0, 1), y)
 
         if p_prim_left < p:
@@ -75,7 +81,7 @@ def simba(model, x, y, args_dict, substitute_model, criterion):
                 delta = delta + args_dict['eps'] * q
                 p = p_prim_left
 
-        q[c, w, h] = 0
+        q.zero_()
 
     return delta
 
@@ -115,6 +121,7 @@ def main():
     parser.add_argument('--dataset', type=str, default='dataset/imagenet-airplanes-images.pt')
     parser.add_argument('--gradient_masks', default=False, action='store_true')
     parser.add_argument('--attack_type', type=str, choices=['nes', 'simba'], default='simba')
+    parser.add_argument('--conv', default=False, action='store_true')
     parser.add_argument('--gradient_model', type=str, choices=ARCHS_LIST, default='resnet152')
     parser.add_argument('--eps', type=float, default=10)
     parser.add_argument('--num_iterations', type=int, default=1)
@@ -136,7 +143,6 @@ def main():
     else:
         attack = simba
         if args_dict['gradient_masks']:
-            criterion = torch.nn.CrossEntropyLoss(reduction='none')
             substitute_model = get_model(args_dict['gradient_model'], parameters='standard').cuda().eval()
 
     for index, image in enumerate(dataset):
