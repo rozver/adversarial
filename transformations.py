@@ -3,10 +3,10 @@ from torch.nn import functional as F
 import torchvision
 from PIL import Image
 from dataset_utils import plot
+import math
 import random
 import sys
 import argparse
-import math
 
 
 def get_transformation_bounds_dict():
@@ -132,7 +132,7 @@ class Blur(Transformation):
         kernel = kernel.view(1, 1, kernel_length, kernel_length)
         kernel = kernel.repeat(3, 1, 1, 1)
 
-        x = torch.nn.functional.conv2d(input=x, weight=kernel, groups=x.size(1), padding=kernel_length // 2)
+        x = F.conv2d(input=x, weight=kernel, groups=x.size(1), padding=kernel_length // 2)
         return x
 
 
