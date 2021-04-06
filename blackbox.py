@@ -1,12 +1,11 @@
 import torch
-from torch.nn.functional import softmax, conv2d
+from torch.nn.functional import softmax
 from model_utils import ARCHS_LIST, predict, get_model
 from pgd import get_current_time
 from gradient_analysis import get_gradient
 from file_utils import validate_save_file_location
 import random
 import argparse
-import math
 
 
 def get_simba_gradient(model, image, criterion):
