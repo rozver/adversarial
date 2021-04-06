@@ -9,26 +9,6 @@ import argparse
 import math
 
 
-def gaussian_kernel(kernel_size=5, sigma=1.):
-    x = torch.linspace(-sigma, sigma, kernel_size)
-    kernel_1d = torch.exp(-x**2/2.0) / torch.sqrt(torch.Tensor([2*math.pi]))
-    kernel_raw = torch.ger(kernel_1d, kernel_1d)
-    kernel = kernel_raw / kernel_raw.sum()
-    return kernel
-
-
-def gaussian_conv(x, kernel_size, sigma=0.01):
-    if len(x.size()) == 3:
-        x.unsqueeze_(0)
-
-    kernel = gaussian_kernel(kernel_size, sigma)
-    kernel = kernel.view(1, 1, kernel_size, kernel_size)
-    kernel = kernel.repeat(3, 1, 1, 1)
-
-    x = conv2d(input=x, weight=kernel, groups=x.size(1))
-    return x
-
-
 def get_simba_gradient(model, image, criterion):
     prediction = predict(model, image.unsqueeze(0).cuda())
     label = torch.argmax(prediction).unsqueeze(0)
