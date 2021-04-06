@@ -3,6 +3,7 @@ from torch.nn import functional as F
 import torchvision
 from PIL import Image
 from dataset_utils import plot
+import math
 import random
 import sys
 import argparse
@@ -12,6 +13,8 @@ def get_transformation_bounds_dict():
     bounds_dict = {
         'light': [-0.1, 0.1],
         'noise': [0.0, 0.05],
+        'blur': [0, 8],
+        'blur_kernel_length': [0, 8],
         'translation': [-10.0, 10.0],
         'rotation': [-10, 10],
     }
@@ -24,6 +27,8 @@ def get_transformation(transformation_type):
         return LightAdjustment()
     elif transformation_type == 'noise':
         return Noise()
+    elif transformation_type == 'blur':
+        return Blur()
     elif transformation_type == 'translation':
         return Translation()
     elif transformation_type == 'rotation':
@@ -96,6 +101,38 @@ class Noise(Transformation):
     def transform(self, x, index):
         noise = torch.normal(mean=0.0, std=self.parameters[index], size=x.size(), device=torch.device('cuda'))
         x = torch.add(x, noise).float()
+        return x
+
+
+def gaussian_kernel(kernel_length, sigma=1.):
+    x = torch.linspace(-sigma, sigma, kernel_length)
+    kernel_1d = torch.exp(-x ** 2 / 2.0) / torch.sqrt(torch.Tensor([2 * math.pi]))
+    kernel_raw = torch.ger(kernel_1d, kernel_1d)
+    kernel = kernel_raw / kernel_raw.sum()
+    return kernel
+
+
+class Blur(Transformation):
+    def __init__(self):
+        self.transformation_type = 'blur'
+        super(Blur, self).__init__(transformation_type=self.transformation_type)
+
+    def get_random_parameters(self):
+        return (0,
+                random.uniform(self.lower_bound, self.upper_bound))
+
+    def transform(self, x, index):
+        kernel_length, sigma = self.parameters[index]
+        max_kernel_length = min(x.size(2), x.size(3))//8
+
+        if kernel_length == 0 or kernel_length >= max_kernel_length:
+            kernel_length = random.randint(1,  max_kernel_length)
+
+        kernel = gaussian_kernel(kernel_length, sigma)
+        kernel = kernel.view(1, 1, kernel_length, kernel_length)
+        kernel = kernel.repeat(3, 1, 1, 1)
+
+        x = F.conv2d(input=x, weight=kernel, groups=x.size(1), padding=kernel_length // 2)
         return x
 
 

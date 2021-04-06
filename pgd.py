@@ -10,31 +10,32 @@ import random
 import copy
 
 TARGET_CLASS = 934
-SURROGATES_LIST_ALL = []
+SURROGATES_COEFFS = {}
 
 
 PARSER_ARGS = [
                 {'name': '--arch', 'type': str, 'choices': ARCHS_LIST, 'default': 'resnet50', 'action': None},
                 {'name': '--checkpoint_location', 'type': str, 'choices': None, 'default': None, 'action': None},
-                {'name': '--from_robustness', 'type': bool, 'choices': None, 'default': False, 'action': 'store_true'},
+                {'name': '--from_robustness', 'default': False, 'action': 'store_true'},
                 {'name': '--dataset', 'type': str, 'choices': None, 'default': 'dataset/imagenet', 'action': None},
                 {'name': '--num_samples', 'type': int, 'choices': None, 'default': 500, 'action': None},
                 {'name': '--sigma', 'type': int, 'choices': None, 'default': 8, 'action': None},
                 {'name': '--num_transformations', 'type': int, 'choices': None, 'default': 50, 'action': None},
                 {'name': '--batch_size', 'type': int, 'choices': None, 'default': 2, 'action': None},
-                {'name': '--masks', 'type': bool, 'choices': None, 'default': False, 'action': 'store_true'},
+                {'name': '--masks', 'default': False, 'action': 'store_true'},
                 {'name': '--eps', 'type': float, 'choices': None, 'default': 8, 'action': None},
                 {'name': '--norm', 'type': str, 'choices': ['l2', 'linf'], 'default': 'linf', 'action': None},
                 {'name': '--step_size', 'type': float, 'choices': None, 'default': 1, 'action': None},
                 {'name': '--num_iterations', 'type': int, 'choices': None, 'default': 10, 'action': None},
-                {'name': '--unadversarial', 'type': bool, 'choices': None, 'default': False, 'action': 'store_true'},
-                {'name': '--targeted', 'type': bool, 'choices': None, 'default': False, 'action': 'store_true'},
-                {'name': '--eot', 'type': bool, 'choices': None, 'default': False, 'action': 'store_true'},
-                {'name': '--transfer', 'type': bool, 'choices': None, 'default': False, 'action': 'store_true'},
-                {'name': '--selective', 'type': bool, 'choices': None, 'default': False, 'action': 'store_true'},
+                {'name': '--unadversarial', 'default': False, 'action': 'store_true'},
+                {'name': '--targeted', 'default': False, 'action': 'store_true'},
+                {'name': '--eot', 'default': False, 'action': 'store_true'},
+                {'name': '--transfer', 'default': False, 'action': 'store_true'},
+                {'name': '--selective', 'default': False, 'action': 'store_true'},
+                {'name': '--surrogates_coeffs', 'default': False, 'action': 'store_true'},
                 {'name': '--num_surrogates', 'type': int, 'choices': None, 'default': 5, 'action': None},
                 {'name': '--save_file_location', 'type': int, 'choices': None, 'default': None, 'action': None},
-              ]
+            ]
 
 
 def get_args_dict():
@@ -88,7 +89,8 @@ class Attacker:
 
             if not args_dict['selective']:
                 surrogates_list = random.sample(self.available_surrogates_list, args_dict['num_surrogates'])
-                SURROGATES_LIST_ALL.append(surrogates_list)
+                coeffs = [1/len(surrogates_list)]*len(surrogates_list)
+                SURROGATES_COEFFS.update(dict(zip(surrogates_list, coeffs)))
                 self.surrogate_models = [get_model(arch, parameters='standard', freeze=True).eval()
                                          for arch in surrogates_list]
             else:
@@ -125,7 +127,6 @@ class Attacker:
         iterations_without_updates = 0
 
         for iteration in range(self.args_dict['num_iterations']):
-
             if iterations_without_updates == self.args_dict['restart_iterations']:
                 x = step.random_perturb(images_batch, masks_batch)
 
@@ -188,7 +189,14 @@ class Attacker:
         surrogates_list = [arch
                            for arch in sorted(model_scores, key=model_scores.get)
                            [:self.args_dict['num_surrogates']]]
-        SURROGATES_LIST_ALL.append(surrogates_list)
+
+        if self.args_dict['surrogate_coeffs']:
+            scores = torch.FloatTensor([model_scores[arch] for arch in model_scores.keys()])
+            coeffs = torch.nn.functional.softmax(scores, dim=0).tolist()
+        else:
+            coeffs = [1/len(surrogates_list)]*len(surrogates_list)
+
+        SURROGATES_COEFFS.update(dict(zip(surrogates_list, coeffs)))
 
         surrogate_models = [get_model(arch, parameters='standard', freeze=True).eval()
                             for arch in surrogates_list]
@@ -270,7 +278,7 @@ def main():
     print('Serializing results...')
     torch.save({'adversarial_examples': adversarial_examples_list,
                 'predictions': predictions_list,
-                'surrogates_list': SURROGATES_LIST_ALL,
+                'surrogates_data': SURROGATES_COEFFS,
                 'args_dict': args_dict},
                args_dict['save_file_location'])
     print('Finished!\n')
