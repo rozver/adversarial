@@ -10,7 +10,7 @@ import random
 import copy
 
 TARGET_CLASS = 934
-SIMILARITY_COEFFS = {}
+ALL_SIMILARITY_COEFFS = []
 
 PARSER_ARGS = [
     {'name': '--arch', 'type': str, 'choices': ARCHS_LIST, 'default': 'resnet50', 'action': None},
@@ -79,6 +79,7 @@ class Attacker:
     def __init__(self, model, args_dict, attack_step=LinfStep, masks_batch=None):
         self.model = model
         self.args_dict = args_dict
+        self.similarity_coeffs = {}
 
         if args_dict['transfer']:
             self.loss = self.transfer_loss
@@ -88,7 +89,8 @@ class Attacker:
             if not args_dict['selective']:
                 surrogates_list = random.sample(self.available_surrogates_list, args_dict['num_surrogates'])
                 coeffs = [1 / len(surrogates_list)] * len(surrogates_list)
-                SIMILARITY_COEFFS.update(dict(zip(surrogates_list, coeffs)))
+                self.similarity_coeffs = (dict(zip(surrogates_list, coeffs)))
+                ALL_SIMILARITY_COEFFS.append(self.similarity_coeffs)
                 self.surrogate_models = [get_model(arch, parameters='standard', freeze=True).eval()
                                          for arch in surrogates_list]
             else:
@@ -190,11 +192,12 @@ class Attacker:
 
         if self.args_dict['similarity_coeffs']:
             scores_reversed = torch.FloatTensor([model_scores[arch] for arch in surrogates_list][::-1])
-            similarity_coeffs = torch.nn.functional.softmax(scores_reversed, dim=0).tolist()
+            coeffs = torch.nn.functional.softmax(scores_reversed, dim=0).tolist()
         else:
-            similarity_coeffs = [1 / len(surrogates_list)] * len(surrogates_list)
+            coeffs = [1 / len(surrogates_list)] * len(surrogates_list)
 
-        SIMILARITY_COEFFS.update(dict(zip(surrogates_list, similarity_coeffs)))
+        self.similarity_coeffs = (dict(zip(surrogates_list, coeffs)))
+        ALL_SIMILARITY_COEFFS.append(self.similarity_coeffs)
 
         surrogate_models = [get_model(arch, parameters='standard', freeze=True).eval()
                             for arch in surrogates_list]
@@ -208,12 +211,12 @@ class Attacker:
     def transfer_loss(self, x, labels):
         loss = torch.zeros([1]).cuda()
 
-        for arch, current_model in zip(SIMILARITY_COEFFS.keys(), self.surrogate_models):
+        for arch, current_model in zip(self.similarity_coeffs.keys(), self.surrogate_models):
             current_model.cuda()
             predictions = predict(current_model, x)
 
             current_loss = self.criterion(predictions, labels)
-            loss = torch.add(loss, self.optimization_direction * SIMILARITY_COEFFS[arch] * current_loss)
+            loss = torch.add(loss, self.optimization_direction * self.similarity_coeffs[arch] * current_loss)
 
         return loss
 
@@ -275,7 +278,7 @@ def main():
     print('Serializing results...')
     torch.save({'adversarial_examples': adversarial_examples_list,
                 'predictions': predictions_list,
-                'surrogates_data': SIMILARITY_COEFFS,
+                'similarity': ALL_SIMILARITY_COEFFS,
                 'args_dict': args_dict},
                args_dict['save_file_location'])
     print('Finished!\n')
