@@ -136,7 +136,6 @@ def main():
     else:
         attack = simba
         if args_dict['gradient_masks']:
-            criterion = torch.nn.CrossEntropyLoss(reduction='none')
             substitute_model = get_model(args_dict['gradient_model'], parameters='standard').cuda().eval()
 
     for index, image in enumerate(dataset):
