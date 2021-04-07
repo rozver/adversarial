@@ -33,17 +33,17 @@ class Trainer:
             current_loss = 0.0
             images_loader, labels_loader = create_data_loaders(images, labels, shuffle=True)
 
-            for images_batch, labels_batch in zip(images_loader, labels_loader):
-                images_batch, labels_batch = images_batch.cuda(), labels_batch.cuda()
+            for image_batch, label_batch in zip(images_loader, labels_loader):
+                image_batch, label_batch = image_batch.cuda(), label_batch.cuda()
 
                 if self.adversarial:
-                    images_batch = self.create_adversarial_examples(images_batch, labels_batch)
+                    image_batch = self.create_adversarial_examples(image_batch, label_batch)
 
                 self.model = self.model.cuda().train()
-                predictions = predict(self.model, self.normalize(images_batch.cuda()))
+                predictions = predict(self.model, self.normalize(image_batch.cuda()))
 
                 self.optimizer.zero_grad()
-                loss = self.criterion(predictions, labels_batch)
+                loss = self.criterion(predictions, label_batch)
                 loss.backward()
                 self.optimizer.step()
 
@@ -54,10 +54,10 @@ class Trainer:
                             if 'weight' in name:
                                 parameter.copy_((parameter + old_parameter) / 2)
 
-                        predictions = predict(self.model, self.normalize(images_batch))
-                        loss = self.criterion(predictions, labels_batch)
+                        predictions = predict(self.model, self.normalize(image_batch))
+                        loss = self.criterion(predictions, label_batch)
 
-                current_loss += loss.item() * images_batch.size(0)
+                current_loss += loss.item() * image_batch.size(0)
 
             epoch_loss = current_loss / len(images)
             print('Epoch: {}/{} - Loss: {}'.format(str(epoch + 1),
@@ -66,20 +66,20 @@ class Trainer:
 
             self.losses.append(epoch)
 
-    def create_adversarial_examples(self, images_batch, labels_batch):
+    def create_adversarial_examples(self, image_batch, label_batch):
         if self.attacker is None:
             self.attacker = Attacker(self.model.eval(), self.pgd_args_dict)
 
         self.attacker.model = self.model.cuda().eval()
 
-        masks_batch = None
+        mask_batch = None
 
-        if masks_batch is None:
-            masks_batch = torch.ones_like(images_batch)
+        if mask_batch is None:
+            mask_batch = torch.ones_like(image_batch)
 
-        adversarial_examples = self.attacker(images_batch,
-                                             masks_batch=masks_batch,
-                                             targets=labels_batch,
+        adversarial_examples = self.attacker(image_batch,
+                                             mask_batch=mask_batch,
+                                             targets=label_batch,
                                              random_start=True)
 
         return adversarial_examples
