@@ -7,14 +7,16 @@ from pgd import get_current_time
 import os
 
 
-def get_gradient(model, x, label, criterion, similarity_coeffs=None):
+def get_gradient(model, x, label, criterion, similarity_coeffs):
     x = autograd.Variable(x, requires_grad=True).cuda()
 
     if type(model) is list:
         if similarity_coeffs is None:
-            similarity_coeffs = dict(zip([i for i in range(len(model))], [1/len(model)]*len(model)))
-        loss = torch.zeros(1)
+            similarity_coeffs = dict(zip([i for i in range(len(model))], [1 / len(model)] * len(model)))
+
+        loss = torch.zeros(1).cuda()
         for index, current_model in enumerate(model):
+            current_model.cuda()
             prediction = predict(current_model, x)
             current_loss = criterion(prediction, label)
             loss = torch.add(loss, similarity_coeffs[list(similarity_coeffs.keys())[index]] * current_loss)
