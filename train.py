@@ -1,35 +1,10 @@
 import torch
-from pgd import Attacker
+from pgd import Attacker, PGD_DEFAULT_ARGS_DICT
 from dataset_utils import create_data_loaders, Normalizer
 from model_utils import ARCHS_LIST, predict, get_model, load_model
 from file_utils import validate_save_file_location, get_current_time
 import argparse
 import os
-
-
-PGD_DEFAULT_ARGS_DICT = {'arch': 'resnet50',
-                         'checkpoint_location': None,
-                         'from_robustness': False,
-                         'dataset': 'dataset/imagenet',
-                         'num_samples': 500,
-                         'sigma': 0.03137254901960784,
-                         'num_transformations': 50,
-                         'batch_size': 2,
-                         'masks': False,
-                         'eps': 0.03137254901960784,
-                         'norm': 'linf',
-                         'step_size': 0.00392156862745098,
-                         'num_iterations': 10,
-                         'unadversarial': False,
-                         'targeted': False,
-                         'eot': False,
-                         'transfer': False,
-                         'selective': False,
-                         'similarity_coeffs': False,
-                         'num_surrogates': 5,
-                         'save_file_location': 'results/pgd_new_experiments/test.py',
-                         'restart_iterations': 10
-                         }
 
 
 class Trainer:
