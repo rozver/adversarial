@@ -93,7 +93,7 @@ def normalize_args_dict(args_dict):
     args_dict['sigma'] = args_dict['sigma'] / 255.0
 
     if args_dict['norm'] == 'linf':
-        args_dict['restart_iterations'] = int((args_dict['eps'] / args_dict['step_size']) * 1.25)
+        args_dict['restart_iterations'] = int((args_dict['eps'] / args_dict['step_size']) * 2)
     else:
         args_dict['restart_iterations'] = 10
 
