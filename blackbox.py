@@ -1,7 +1,7 @@
 import torch
 from torch.nn.functional import softmax
 from model_utils import ARCHS_LIST, predict, get_model
-from pgd import get_current_time
+from pgd import get_current_time, Attacker, PGD_DEFAULT_ARGS_DICT
 from gradient_analysis import get_gradient
 from transformations import Blur
 from file_utils import validate_save_file_location
@@ -9,10 +9,8 @@ import random
 import argparse
 
 
-def get_simba_gradient(model, image, criterion):
-    prediction = predict(model, image.unsqueeze(0).cuda())
-    label = torch.argmax(prediction).unsqueeze(0)
-    grad = get_gradient(model, image, label, criterion)
+def get_simba_gradient(model, x, y, criterion, similarity_coeffs):
+    grad = get_gradient(model, x, y, criterion, similarity_coeffs)
     grad_vector = torch.flatten(grad)
     return grad_vector
 
@@ -25,10 +23,9 @@ def normalize_gradient_vector(grad_vector):
 def get_probabilities(model, x, y):
     with torch.no_grad():
         prediction = predict(model, x.unsqueeze(0))
-    prediction_softmax = softmax(prediction, 1)
-    prediction_softmax_y = prediction_softmax[0][y]
-
-    return prediction_softmax_y
+        prediction_softmax = softmax(prediction, 1)
+        prediction_softmax_y = prediction_softmax[0][y]
+        return prediction_softmax_y
 
 
 def get_tensor_coordinate_indices(coordinate, size):
@@ -38,12 +35,20 @@ def get_tensor_coordinate_indices(coordinate, size):
     return c, w, h
 
 
-def simba(model, x, y, args_dict, substitute_model, criterion):
+def simba(model, x, y, args_dict, substitute_model, criterion, pgd_attacker):
     delta = torch.zeros_like(x).cuda()
     q = torch.zeros_like(x).cuda()
     available_coordinates = None
+    similarity_coeffs = None
     conv = Blur()
     conv.parameters = [(9, 3)]
+
+    if args_dict['select_ensembles'] and substitute_model is None:
+        x.unsqueeze_(0)
+        step = pgd_attacker.attack_step(x, 25/255.0, 1/255.0)
+        substitute_model = pgd_attacker.selective_transfer(x, torch.ones_like(x), y, step)
+        similarity_coeffs = pgd_attacker.similarity_coeffs
+        x.squeeze_()
 
     p = get_probabilities(model, x, y)
 
@@ -55,7 +60,7 @@ def simba(model, x, y, args_dict, substitute_model, criterion):
 
     for iteration in range(args_dict['num_iterations']):
         if args_dict['gradient_masks']:
-            distribution = get_simba_gradient(substitute_model, x + delta, criterion)
+            distribution = get_simba_gradient(substitute_model, x + delta, y, criterion, similarity_coeffs)
             distribution_normalized = normalize_gradient_vector(distribution*available_coordinates)
             coordinate = random.choices(perm, distribution_normalized)[0]
             available_coordinates[coordinate] = 0
@@ -109,7 +114,7 @@ def fgsm_grad(image, grad, eps):
     return adversarial_example.detach()
 
 
-def nes(model, image, label, args_dict, substitute_model, criterion):
+def nes(model, image, label, args_dict, *args):
     return fgsm_grad(image, nes_gradient(model, image, label, args_dict), args_dict['eps'])-image
 
 
@@ -119,10 +124,11 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', type=str, choices=ARCHS_LIST, default='resnet50')
     parser.add_argument('--dataset', type=str, default='dataset/imagenet-airplanes-images.pt')
-    parser.add_argument('--gradient_masks', default=False, action='store_true')
+    parser.add_argument('--gradient', default=False, action='store_true')
     parser.add_argument('--attack_type', type=str, choices=['nes', 'simba'], default='simba')
     parser.add_argument('--conv', default=False, action='store_true')
-    parser.add_argument('--gradient_model', type=str, choices=ARCHS_LIST, default='resnet152')
+    parser.add_argument('--substitute_model', type=str, choices=ARCHS_LIST, default='resnet152')
+    parser.add_argument('--select_ensembles', default=False, action='store_true')
     parser.add_argument('--eps', type=float, default=10)
     parser.add_argument('--num_iterations', type=int, default=1)
     parser.add_argument('--save_file_location', type=str, default='results/blackbox/' + time + '.pt')
@@ -136,14 +142,20 @@ def main():
 
     adversarial_examples_list = []
     predictions_list = []
-    substitute_model, criterion = None, None
+    substitute_model, criterion, pgd_attacker = None, None, None
 
     if args_dict['attack_type'] == 'nes':
         attack = nes
     else:
         attack = simba
         if args_dict['gradient_masks']:
-            substitute_model = get_model(args_dict['gradient_model'], parameters='standard').cuda().eval()
+            if args_dict['select_ensembles']:
+                pgd_attacker = Attacker(model.cuda(), PGD_DEFAULT_ARGS_DICT)
+                pgd_attacker.args_dict['label_shifts'] = 0
+                pgd_attacker.available_surrogates_list = ARCHS_LIST
+                pgd_attacker.available_surrogates_list.remove(args_dict['model'])
+            else:
+                substitute_model = get_model(args_dict['gradient_model'], parameters='standard').cuda().eval()
 
     for index, image in enumerate(dataset):
         with torch.no_grad():
@@ -152,7 +164,7 @@ def main():
 
         criterion = torch.nn.CrossEntropyLoss(reduction='none')
 
-        delta = attack(model, image.cuda(), label.cuda(), args_dict, substitute_model, criterion)
+        delta = attack(model, image.cuda(), label.cuda(), args_dict, substitute_model, criterion, pgd_attacker)
         adversarial_example = (image.cuda() + delta).clamp(0, 1)
 
         with torch.no_grad():
