@@ -7,6 +7,31 @@ import argparse
 import os
 
 
+PGD_DEFAULT_ARGS_DICT = {'arch': 'resnet50',
+                         'checkpoint_location': None,
+                         'from_robustness': False,
+                         'dataset': 'dataset/imagenet',
+                         'num_samples': 500,
+                         'sigma': 0.03137254901960784,
+                         'num_transformations': 50,
+                         'batch_size': 2,
+                         'masks': False,
+                         'eps': 0.03137254901960784,
+                         'norm': 'linf',
+                         'step_size': 0.00392156862745098,
+                         'num_iterations': 10,
+                         'unadversarial': False,
+                         'targeted': False,
+                         'eot': False,
+                         'transfer': False,
+                         'selective': False,
+                         'similarity_coeffs': False,
+                         'num_surrogates': 5,
+                         'save_file_location': 'results/pgd_new_experiments/test.py',
+                         'restart_iterations': 10
+                         }
+
+
 class Trainer:
     def __init__(self, training_args_dict, pgd_args_dict,
                  criterion=torch.nn.CrossEntropyLoss(),
@@ -102,7 +127,7 @@ def main():
     parser.add_argument('--learning_rate', type=float, default=1e-2)
     parser.add_argument('--weight_averaging', default=False, action='store_true')
     parser.add_argument('--adversarial', default=False, action='store_true')
-    parser.add_argument('--save_file_location', type=str, default='models/' + str(get_current_time()) + 'pt')
+    parser.add_argument('--save_file_location', type=str, default='models/' + str(get_current_time()) + '.pt')
     args_dict = vars(parser.parse_args())
 
     validate_save_file_location(args_dict['save_file_location'])
@@ -110,19 +135,11 @@ def main():
     if os.path.exists(args_dict['dataset']):
         dataset_properties = torch.load(args_dict['dataset'])
 
-        pgd_args_dict = {
-            'arch': args_dict['arch'],
-            'dataset': dataset_properties['images'],
-            'masks': False,
-            'eps': 32 / 255.0,
-            'norm': 'linf',
-            'step_size': 16 / 255.0,
-            'num_iterations': 1,
-            'unadversarial': False,
-            'targeted': False,
-            'eot': False,
-            'transfer': False,
-        }
+        pgd_args_dict = PGD_DEFAULT_ARGS_DICT
+        pgd_args_dict['arch'] = args_dict['arch']
+        pgd_args_dict['dataset'] = dataset_properties['images']
+        pgd_args_dict['eps'] = 32 / 255.0
+        pgd_args_dict['step_size'] = 32 / 255.0
 
         images = torch.load(dataset_properties['images'])
 
