@@ -11,8 +11,7 @@ import argparse
 
 def get_simba_gradient(model, x, y, criterion, similarity_coeffs):
     grad = get_gradient(model, x, y, criterion, similarity_coeffs)
-    grad_vector = torch.flatten(grad)
-    return grad_vector
+    return grad
 
 
 def normalize_gradient_vector(grad_vector):
@@ -43,7 +42,7 @@ def simba(model, x, y, args_dict, substitute_model, criterion, pgd_attacker):
     conv = Blur()
     conv.parameters = [(9, 3)]
 
-    if args_dict['select_ensembles'] and substitute_model is None:
+    if args_dict['ensemble_selection'] and substitute_model is None:
         x.unsqueeze_(0)
         step = pgd_attacker.attack_step(x, 25/255.0, 1/255.0)
         substitute_model = pgd_attacker.selective_transfer(x, torch.ones_like(x), y, step)
@@ -60,10 +59,12 @@ def simba(model, x, y, args_dict, substitute_model, criterion, pgd_attacker):
 
     for iteration in range(args_dict['num_iterations']):
         if args_dict['gradient_masks']:
-            distribution = get_simba_gradient(substitute_model, x + delta, y, criterion, similarity_coeffs)
+            grad = get_simba_gradient(substitute_model, x + delta, y, criterion, similarity_coeffs)
+            distribution = torch.flatten(grad)
             distribution_normalized = normalize_gradient_vector(distribution*available_coordinates)
             coordinate = random.choices(perm, distribution_normalized)[0]
             available_coordinates[coordinate] = 0
+
         else:
             coordinate = perm[iteration]
 
@@ -128,7 +129,7 @@ def main():
     parser.add_argument('--attack_type', type=str, choices=['nes', 'simba'], default='simba')
     parser.add_argument('--conv', default=False, action='store_true')
     parser.add_argument('--substitute_model', type=str, choices=ARCHS_LIST, default='resnet152')
-    parser.add_argument('--select_ensembles', default=False, action='store_true')
+    parser.add_argument('--ensemble_selection', default=False, action='store_true')
     parser.add_argument('--eps', type=float, default=10)
     parser.add_argument('--num_iterations', type=int, default=1)
     parser.add_argument('--save_file_location', type=str, default='results/blackbox/' + time + '.pt')
@@ -149,7 +150,7 @@ def main():
     else:
         attack = simba
         if args_dict['gradient_masks']:
-            if args_dict['select_ensembles']:
+            if args_dict['ensemble_selection']:
                 pgd_attacker = Attacker(model.cuda(), PGD_DEFAULT_ARGS_DICT)
                 pgd_attacker.args_dict['label_shifts'] = 0
                 pgd_attacker.available_surrogates_list = ARCHS_LIST
