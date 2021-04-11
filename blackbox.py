@@ -7,6 +7,7 @@ from transformations import Blur
 from file_utils import validate_save_file_location
 import random
 import argparse
+import sys
 
 
 def get_simba_gradient(model, x, y, criterion, similarity_coeffs):
@@ -64,6 +65,10 @@ def simba(model, x, y, args_dict, substitute_model, criterion, pgd_attacker):
             distribution_normalized = normalize_gradient_vector(distribution*available_coordinates)
             coordinate = random.choices(perm, distribution_normalized)[0]
             available_coordinates[coordinate] = 0
+
+            if args_dict['transfer']:
+                delta = delta + args_dict['step_size']*torch.sign(grad.cuda())
+                delta = torch.clamp(delta, -args_dict['eps'], args_dict['eps'])
 
         else:
             coordinate = perm[iteration]
@@ -130,7 +135,9 @@ def main():
     parser.add_argument('--conv', default=False, action='store_true')
     parser.add_argument('--substitute_model', type=str, choices=ARCHS_LIST, default='resnet152')
     parser.add_argument('--ensemble_selection', default=False, action='store_true')
+    parser.add_argument('--transfer', default=False, action='store_true')
     parser.add_argument('--eps', type=float, default=10)
+    parser.add_argument('--step_size', type=float, default=1/255.0)
     parser.add_argument('--num_iterations', type=int, default=1)
     parser.add_argument('--save_file_location', type=str, default='results/blackbox/' + time + '.pt')
     args_dict = vars(parser.parse_args())
@@ -156,7 +163,7 @@ def main():
                 pgd_attacker.available_surrogates_list = ARCHS_LIST
                 pgd_attacker.available_surrogates_list.remove(args_dict['model'])
             else:
-                substitute_model = get_model(args_dict['gradient_model'], parameters='standard').cuda().eval()
+                substitute_model = get_model(args_dict['substitute_model'], parameters='standard').cuda().eval()
 
     for index, image in enumerate(dataset):
         with torch.no_grad():
