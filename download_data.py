@@ -12,8 +12,8 @@ with open(output_location, 'wb') as output_file:
     output_file.write(r.content)
 print('Finished!')
 
-# Extract the zip file into the current directory
-print('Unzipping file...')
+# Extract data to the current directory
+print('Unzipping data...')
 with zipfile.ZipFile(output_location, 'r') as zip_file:
     zip_file.extractall('')
 print('Finished!')
