@@ -51,14 +51,14 @@ def simba(model, x, y, args_dict, substitute_model, criterion, pgd_attacker):
 
     p = get_probabilities(model, x, y)
 
-    if not args_dict['gradient_masks']:
+    if not args_dict['gradient_priors']:
         perm = torch.randperm(x.size().numel()).tolist()
     else:
         perm = range(0, x.size().numel())
         available_coordinates = torch.ones(x.size().numel())
 
     for iteration in range(args_dict['num_iterations']):
-        if args_dict['gradient_masks']:
+        if args_dict['gradient_priors']:
             grad = get_simba_gradient(substitute_model, x + delta, y, criterion, similarity_coeffs)
             distribution = torch.flatten(grad)
             distribution_normalized = normalize_gradient_vector(distribution*available_coordinates)
@@ -125,7 +125,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', type=str, choices=ARCHS_LIST, default='resnet50')
     parser.add_argument('--dataset', type=str, default='dataset/imagenet-airplanes-images.pt')
-    parser.add_argument('--gradient', default=False, action='store_true')
+    parser.add_argument('--gradient_priors', default=False, action='store_true')
     parser.add_argument('--attack_type', type=str, choices=['nes', 'simba'], default='simba')
     parser.add_argument('--conv', default=False, action='store_true')
     parser.add_argument('--substitute_model', type=str, choices=ARCHS_LIST, default='resnet152')
@@ -149,7 +149,7 @@ def main():
         attack = nes
     else:
         attack = simba
-        if args_dict['gradient_masks']:
+        if args_dict['gradient_priors']:
             if args_dict['ensemble_selection']:
                 pgd_attacker = Attacker(model.cuda(), PGD_DEFAULT_ARGS_DICT)
                 pgd_attacker.args_dict['label_shifts'] = 0

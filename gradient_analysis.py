@@ -15,11 +15,11 @@ def get_gradient(model, x, label, criterion, similarity_coeffs):
             similarity_coeffs = dict(zip([i for i in range(len(model))], [1 / len(model)] * len(model)))
 
         loss = torch.zeros(1).cuda()
-        for index, current_model in enumerate(model):
+        for arch, current_model in zip(similarity_coeffs.keys(), model):
             current_model.cuda()
             prediction = predict(current_model, x)
             current_loss = criterion(prediction, label)
-            loss = torch.add(loss, similarity_coeffs[list(similarity_coeffs.keys())[index]] * current_loss)
+            loss = torch.add(loss, similarity_coeffs[arch] * current_loss)
     else:
         prediction = predict(model, x)
         loss = criterion(prediction, label)
