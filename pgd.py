@@ -2,12 +2,14 @@ import torch
 import robustness
 from pgd_attack_steps import LinfStep, L2Step
 from model_utils import ARCHS_LIST, get_model, load_model, predict
+from dataset_utils import imagenet_mapping
 from transformations import get_random_transformation
 from file_utils import get_current_time, validate_save_file_location
 from collections import defaultdict
 import argparse
 import random
 import copy
+import os
 
 TARGET_CLASS = 934
 ALL_SIMILARITY_COEFFS = []
@@ -17,7 +19,7 @@ PARSER_ARGS = [
     {'name': '--checkpoint_location', 'type': str, 'choices': None, 'default': None, 'action': None},
     {'name': '--from_robustness', 'default': False, 'action': 'store_true'},
     {'name': '--dataset', 'type': str, 'choices': None, 'default': 'dataset/imagenet', 'action': None},
-    {'name': '--num_samples', 'type': int, 'choices': None, 'default': 500, 'action': None},
+    {'name': '--num_samples', 'type': int, 'choices': None, 'default': 50, 'action': None},
     {'name': '--sigma', 'type': int, 'choices': None, 'default': 8, 'action': None},
     {'name': '--num_transformations', 'type': int, 'choices': None, 'default': 50, 'action': None},
     {'name': '--batch_size', 'type': int, 'choices': None, 'default': 2, 'action': None},
@@ -265,7 +267,10 @@ def main():
     if args_dict['masks']:
         loader = torch.load(args_dict['dataset'])
     else:
-        dataset = robustness.datasets.ImageNet(args_dict['dataset'])
+        label_mapping = None
+        if not os.path.exists(os.path.join(args_dict['dataset'], 'val')):
+            label_mapping = imagenet_mapping
+        dataset = robustness.datasets.ImageNet(args_dict['dataset'], label_mapping=label_mapping)
         loader, _ = dataset.make_loaders(workers=10, batch_size=args_dict['batch_size'])
 
     print('Finished!\n')
@@ -283,12 +288,24 @@ def main():
             image_batch, label_batch = batch
             mask_batch = torch.ones_like(image_batch)
 
+        image_batch = image_batch.cuda()
+        mask_batch = mask_batch.cuda()
+        label_batch = label_batch.cuda()
+
         if not args_dict['targeted']:
-            targets = label_batch
+            predicted_label_batch = torch.argmax(predict(model, image_batch), dim=1)
+            matching_labels = torch.eq(label_batch, predicted_label_batch)
+            num_matching_labels = torch.sum(matching_labels)
+            if num_matching_labels == 0:
+                continue
+
+            image_batch, mask_batch, targets = (image_batch[matching_labels],
+                                                mask_batch[matching_labels],
+                                                label_batch[matching_labels])
         else:
             targets = TARGET_CLASS * torch.ones_like(label_batch)
 
-        adversarial_examples = attacker(image_batch.cuda(), mask_batch.cuda(), targets.cuda(), False)
+        adversarial_examples = attacker(image_batch, mask_batch, targets, False)
         adversarial_predictions = predict(model, adversarial_examples)
 
         adversarial_examples_list.append(adversarial_examples.cpu())
