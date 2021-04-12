@@ -12,6 +12,7 @@ import os
 from abc import ABC
 import shutil
 import json
+import ast
 
 
 def normalize_names(location):
@@ -52,6 +53,12 @@ def plot(images):
             plot_image(images[i])
     else:
         plot_image(images)
+
+
+def imagenet_mapping(*args):
+    classes_dict_keys = list(range(0, 1000))
+    classes_dict_keys_str = [str(x) for x in classes_dict_keys]
+    return classes_dict_keys_str, dict(zip(classes_dict_keys_str, classes_dict_keys))
 
 
 def inspect_dataset(dataset):
