@@ -34,7 +34,7 @@ python pgd.py
 ~~~
 
 ### Foreground Attack (ours) 
-* Example usage: creating robust adversarial examples (utilizing [EOT](https://arxiv.org/abs/1707.07397)) against ResNet50:
+* Example usage: creating robust adversarial examples, utilizing [EOT](https://arxiv.org/abs/1707.07397) (Athalye et al., 2018), against ResNet50:
 ~~~
 python pgd.py
        --arch resnet50
