@@ -6,11 +6,14 @@ from matplotlib import pyplot as plt
 
 ARGS_DICT_KEYS_PGD = ['arch', 'checkpoint_location', 'from_robustness', 'dataset', 'masks', 'eps', 'norm',
                       'step_size', 'num_iterations', 'targeted', 'eot', 'transfer', 'save_file_location']
-ARGS_DICT_KEYS_BLACKBOX = ['model', 'dataset', 'masks', 'gradient_masks', 'attack_type',
+ARGS_DICT_KEYS_BLACKBOX = ['model', 'dataset', 'gradient_masks', 'attack_type',
                            'gradient_model', 'eps', 'num_iterations', 'save_file_location']
 
 
 def has_wrong_args(results, results_location):
+    if 'args' in results.keys():
+        results['args_dict'] = results['args']
+
     if 'args_dict' not in results.keys():
         print('File ' + results_location + ' does not have dictionary key args_dict')
         return True
@@ -34,34 +37,26 @@ def plot_adversarial_examples(results):
         plt.show()
 
 
-def save_images(results, results_location, dataset):
+def save_images(results, results_location, dataset, save_original):
     results_images_folder = os.path.dirname(results_location) + '/images/' + results_location.split('/')[-1][:-3]
     original_directory = results_images_folder + '/original/'
     adversarial_directory = results_images_folder + '/adversarial/'
-    noises_directory = results_images_folder + '/noises/'
-    masks_directory = results_images_folder + '/masks/'
 
     if not os.path.exists(results_images_folder):
-        os.makedirs(original_directory)
         os.makedirs(adversarial_directory)
-        os.makedirs(noises_directory)
 
-        if results['args_dict']['masks']:
-            os.makedirs(masks_directory)
+        if save_original:
+            os.makedirs(original_directory)
 
-    for index, (original_image, adversarial_example) in enumerate(zip(dataset, results['adversarial_examples'])):
-        if results['args_dict']['masks']:
-            original_image, mask = original_image
-            save_image(mask, (masks_directory + str(index) + '.png'))
+    for batch_index, (adversarial_batch, original_batch) in enumerate(zip(results['adversarial_examples'], dataset)):
+        if len(adversarial_batch.size()) == 3:
+            adversarial_batch = adversarial_batch.unsqueeze(0)
 
-        if adversarial_example.size() != original_image.size():
-            continue
+        for index in range(adversarial_batch.size(0)):
+            save_image(adversarial_batch[index], (adversarial_directory + str(batch_index) + '_' + str(index) + '.png'))
 
-        noise = original_image - adversarial_example
-
-        save_image(original_image, (original_directory + str(index) + '.png'))
-        save_image(adversarial_example, (adversarial_directory + str(index) + '.png'))
-        save_image(noise, (noises_directory + str(index) + '.png'))
+            if save_original:
+                save_image(original_batch[index], (original_directory + str(batch_index) + '_' + str(index) + '.png'))
 
 
 def main():
@@ -94,15 +89,16 @@ def main():
 
             adversarial_classes = torch.argmax(predictions['adversarial'], dim=1)
 
-            successful_attacks += torch.sum(torch.eq(adversarial_classes, original_classes)).item()
+            successful_attacks += torch.sum(~torch.eq(adversarial_classes, original_classes)).item()
 
         if 'num_samples' in results['args_dict'].keys():
             num_samples = results['args_dict']['num_samples']
         else:
             num_samples = len(results['predictions'])
 
-        if not results['args_dict']['targeted']:
-            successful_attacks = num_samples - successful_attacks
+        if 'targeted' in results['args_dict']:
+            if results['args_dict']['targeted']:
+                successful_attacks = num_samples - successful_attacks
 
         success_rate = round(successful_attacks / num_samples, 2)
         setups_and_results.append(str(results['args_dict']) + '\nAttack success rate: ' +
@@ -110,8 +106,20 @@ def main():
                                   '\n')
 
         if args_dict['save_images']:
-            dataset = torch.load(results['args_dict']['dataset'])
-            save_images(results, results_location, dataset)
+            save_original = False
+            if os.path.exists(results['args_dict']['dataset']):
+                if 'batch_size' not in results['args_dict']:
+                    results['args_dict']['batch_size'] = 1
+                    
+                dataset = torch.load(results['args_dict']['dataset'])
+                dataset = torch.utils.data.DataLoader(dataset,
+                                                      batch_size=results['args_dict']['batch_size'],
+                                                      num_workers=4)
+                save_original = True
+            else:
+                dataset = len(results['adversarial_examples']) * [0]
+
+            save_images(results, results_location, dataset, save_original)
 
     with open(os.path.join(args_dict['location'], 'setups_and_results.txt'), 'w') as file:
         for result in setups_and_results:

@@ -2,39 +2,66 @@ import torch
 import robustness
 from pgd_attack_steps import LinfStep, L2Step
 from model_utils import ARCHS_LIST, get_model, load_model, predict
+from dataset_utils import imagenet_mapping
 from transformations import get_random_transformation
 from file_utils import get_current_time, validate_save_file_location
 from collections import defaultdict
 import argparse
 import random
 import copy
+import os
 
 TARGET_CLASS = 934
-SURROGATES_LIST_ALL = []
-
+ALL_SIMILARITY_COEFFS = []
 
 PARSER_ARGS = [
-                {'name': '--arch', 'type': str, 'choices': ARCHS_LIST, 'default': 'resnet50', 'action': None},
-                {'name': '--checkpoint_location', 'type': str, 'choices': None, 'default': None, 'action': None},
-                {'name': '--from_robustness', 'type': bool, 'choices': None, 'default': False, 'action': 'store_true'},
-                {'name': '--dataset', 'type': str, 'choices': None, 'default': 'dataset/imagenet', 'action': None},
-                {'name': '--num_samples', 'type': int, 'choices': None, 'default': 500, 'action': None},
-                {'name': '--sigma', 'type': int, 'choices': None, 'default': 8, 'action': None},
-                {'name': '--num_transformations', 'type': int, 'choices': None, 'default': 50, 'action': None},
-                {'name': '--batch_size', 'type': int, 'choices': None, 'default': 2, 'action': None},
-                {'name': '--masks', 'type': bool, 'choices': None, 'default': False, 'action': 'store_true'},
-                {'name': '--eps', 'type': int, 'choices': None, 'default': 8, 'action': None},
-                {'name': '--norm', 'type': str, 'choices': ['l2', 'linf'], 'default': 'linf', 'action': None},
-                {'name': '--step_size', 'type': int, 'choices': None, 'default': 1, 'action': None},
-                {'name': '--num_iterations', 'type': int, 'choices': None, 'default': 10, 'action': None},
-                {'name': '--unadversarial', 'type': bool, 'choices': None, 'default': False, 'action': 'store_true'},
-                {'name': '--targeted', 'type': bool, 'choices': None, 'default': False, 'action': 'store_true'},
-                {'name': '--eot', 'type': bool, 'choices': None, 'default': False, 'action': 'store_true'},
-                {'name': '--transfer', 'type': bool, 'choices': None, 'default': False, 'action': 'store_true'},
-                {'name': '--selective', 'type': bool, 'choices': None, 'default': False, 'action': 'store_true'},
-                {'name': '--num_surrogates', 'type': int, 'choices': None, 'default': 5, 'action': None},
-                {'name': '--save_file_location', 'type': int, 'choices': None, 'default': None, 'action': None},
-              ]
+    {'name': '--arch', 'type': str, 'choices': ARCHS_LIST, 'default': 'resnet50', 'action': None},
+    {'name': '--checkpoint_location', 'type': str, 'choices': None, 'default': None, 'action': None},
+    {'name': '--from_robustness', 'default': False, 'action': 'store_true'},
+    {'name': '--dataset', 'type': str, 'choices': None, 'default': 'dataset/imagenet', 'action': None},
+    {'name': '--num_samples', 'type': int, 'choices': None, 'default': 50, 'action': None},
+    {'name': '--sigma', 'type': int, 'choices': None, 'default': 8, 'action': None},
+    {'name': '--num_transformations', 'type': int, 'choices': None, 'default': 50, 'action': None},
+    {'name': '--batch_size', 'type': int, 'choices': None, 'default': 2, 'action': None},
+    {'name': '--masks', 'default': False, 'action': 'store_true'},
+    {'name': '--eps', 'type': float, 'choices': None, 'default': 8, 'action': None},
+    {'name': '--norm', 'type': str, 'choices': ['l2', 'linf'], 'default': 'linf', 'action': None},
+    {'name': '--step_size', 'type': float, 'choices': None, 'default': 1, 'action': None},
+    {'name': '--num_iterations', 'type': int, 'choices': None, 'default': 10, 'action': None},
+    {'name': '--unadversarial', 'default': False, 'action': 'store_true'},
+    {'name': '--targeted', 'default': False, 'action': 'store_true'},
+    {'name': '--eot', 'default': False, 'action': 'store_true'},
+    {'name': '--transfer', 'default': False, 'action': 'store_true'},
+    {'name': '--selective', 'default': False, 'action': 'store_true'},
+    {'name': '--similarity_coeffs', 'default': False, 'action': 'store_true'},
+    {'name': '--num_surrogates', 'type': int, 'choices': None, 'default': 5, 'action': None},
+    {'name': '--save_file_location', 'type': int, 'choices': None, 'default': None, 'action': None},
+]
+
+PGD_DEFAULT_ARGS_DICT = {
+    'arch': 'resnet50',
+    'checkpoint_location': None,
+    'from_robustness': False,
+    'dataset': 'dataset/imagenet',
+    'num_samples': 500,
+    'sigma': 0.03137254901960784,
+    'num_transformations': 50,
+    'batch_size': 2,
+    'masks': False,
+    'eps': 0.03137254901960784,
+    'norm': 'linf',
+    'step_size': 0.00392156862745098,
+    'num_iterations': 10,
+    'unadversarial': False,
+    'targeted': False,
+    'eot': False,
+    'transfer': False,
+    'selective': False,
+    'similarity_coeffs': False,
+    'num_surrogates': 5,
+    'save_file_location': 'results/pgd_new_experiments/test.py',
+    'restart_iterations': 10
+     }
 
 
 def get_args_dict():
@@ -61,17 +88,25 @@ def normalize_args_dict(args_dict):
     if args_dict['save_file_location'] is None:
         args_dict['save_file_location'] = 'results/pgd_new_experiments/' + time + '.pt'
     validate_save_file_location(args_dict['save_file_location'])
-    args_dict['eps'] = args_dict['eps'] / 255.0
+
+    if args_dict['norm'] == 'linf':
+        args_dict['eps'] = args_dict['eps'] / 255.0
     args_dict['step_size'] = args_dict['step_size'] / 255.0
     args_dict['sigma'] = args_dict['sigma'] / 255.0
+
+    if args_dict['norm'] == 'linf':
+        args_dict['restart_iterations'] = int((args_dict['eps'] / args_dict['step_size']) * 2)
+    else:
+        args_dict['restart_iterations'] = 10
+
     return args_dict
 
 
 class Attacker:
-    def __init__(self, model, args_dict, attack_step=LinfStep, masks_batch=None):
+    def __init__(self, model, args_dict, attack_step=LinfStep, mask_batch=None):
         self.model = model
         self.args_dict = args_dict
-        self.surrogates_list = []
+        self.similarity_coeffs = {}
 
         if args_dict['transfer']:
             self.loss = self.transfer_loss
@@ -80,7 +115,9 @@ class Attacker:
 
             if not args_dict['selective']:
                 surrogates_list = random.sample(self.available_surrogates_list, args_dict['num_surrogates'])
-                SURROGATES_LIST_ALL.append(surrogates_list)
+                coeffs = [1 / len(surrogates_list)] * len(surrogates_list)
+                self.similarity_coeffs = (dict(zip(surrogates_list, coeffs)))
+                ALL_SIMILARITY_COEFFS.append(self.similarity_coeffs)
                 self.surrogate_models = [get_model(arch, parameters='standard', freeze=True).eval()
                                          for arch in surrogates_list]
             else:
@@ -93,23 +130,23 @@ class Attacker:
 
         self.criterion = torch.nn.CrossEntropyLoss()
         self.optimization_direction = -1 if args_dict['unadversarial'] or args_dict['targeted'] else 1
-        self.masks_batch = masks_batch
+        self.mask_batch = mask_batch
         self.attack_step = attack_step
 
-    def __call__(self, images_batch, masks_batch, targets, random_start=False):
+    def __call__(self, image_batch, mask_batch, targets, random_start=False):
         best_loss = None
         best_x = None
 
-        step = self.attack_step(images_batch, self.args_dict['eps'], self.args_dict['step_size'])
+        step = self.attack_step(image_batch, self.args_dict['eps'], self.args_dict['step_size'])
 
         if random_start:
-            images_batch = step.random_perturb(images_batch, masks_batch)
+            image_batch = step.random_perturb(image_batch, mask_batch)
 
-        x = images_batch.clone().detach().requires_grad_(True)
+        x = image_batch.clone().detach().requires_grad_(True)
 
         if self.args_dict['transfer'] and self.args_dict['selective']:
-            self.surrogate_models = self.selective_transfer(images_batch,
-                                                            masks_batch,
+            self.surrogate_models = self.selective_transfer(image_batch,
+                                                            mask_batch,
                                                             targets,
                                                             step)
             step.eps = self.args_dict['eps']
@@ -117,9 +154,8 @@ class Attacker:
         iterations_without_updates = 0
 
         for iteration in range(self.args_dict['num_iterations']):
-
-            if iterations_without_updates == 10:
-                x = step.random_perturb(images_batch, masks_batch)
+            if iterations_without_updates == self.args_dict['restart_iterations']:
+                x = step.random_perturb(image_batch, mask_batch)
 
             x = x.clone().detach().requires_grad_(True)
 
@@ -129,7 +165,7 @@ class Attacker:
             else:
                 loss = self.loss(x.cuda(), targets)
 
-            x.register_hook(lambda grad: grad * masks_batch.float())
+            x.register_hook(lambda grad: grad * mask_batch.float())
             loss.backward()
 
             grads = x.grad.detach().clone()
@@ -152,17 +188,17 @@ class Attacker:
 
         return best_x.cuda()
 
-    def selective_transfer(self, images_batch, masks_batch, original_labels, step):
+    def selective_transfer(self, image_batch, mask_batch, original_labels, step):
         model_scores = {}
         model_scores = defaultdict(lambda: 0, model_scores)
         mse_criterion = torch.nn.MSELoss(reduction='mean')
-        batch_indices = torch.arange(images_batch.size(0))
+        batch_indices = torch.arange(image_batch.size(0))
 
         step.eps = self.args_dict['sigma']
 
         for iteration in range(self.args_dict['num_transformations']):
-            x = images_batch.clone().detach().requires_grad_(False)
-            x = step.random_perturb(x, masks_batch)
+            x = image_batch.clone().detach().requires_grad_(False)
+            x = step.random_perturb(x, mask_batch)
 
             predictions = predict(self.model.cuda(), x.cuda())
             labels = torch.argmax(predictions, dim=1)
@@ -180,28 +216,35 @@ class Attacker:
         surrogates_list = [arch
                            for arch in sorted(model_scores, key=model_scores.get)
                            [:self.args_dict['num_surrogates']]]
-        SURROGATES_LIST_ALL.append(surrogates_list)
+
+        if self.args_dict['similarity_coeffs']:
+            scores_reversed = torch.FloatTensor([model_scores[arch] for arch in surrogates_list][::-1])
+            coeffs = torch.nn.functional.softmax(scores_reversed, dim=0).tolist()
+        else:
+            coeffs = [1 / len(surrogates_list)] * len(surrogates_list)
+
+        self.similarity_coeffs = (dict(zip(surrogates_list, coeffs)))
+        ALL_SIMILARITY_COEFFS.append(self.similarity_coeffs)
 
         surrogate_models = [get_model(arch, parameters='standard', freeze=True).eval()
                             for arch in surrogates_list]
         return surrogate_models
 
-    def normal_loss(self, x, label):
-        prediction = predict(self.model, x)
-        loss = self.optimization_direction * self.criterion(prediction, label)
+    def normal_loss(self, x, labels):
+        predictions = predict(self.model, x)
+        loss = self.optimization_direction * self.criterion(predictions, labels)
         return loss
 
-    def transfer_loss(self, x, label):
+    def transfer_loss(self, x, labels):
         loss = torch.zeros([1]).cuda()
 
-        for current_model in self.surrogate_models:
+        for arch, current_model in zip(self.similarity_coeffs.keys(), self.surrogate_models):
             current_model.cuda()
-            prediction = predict(current_model, x)
+            predictions = predict(current_model, x)
 
-            current_loss = self.criterion(prediction, label)
-            loss = torch.add(loss, self.optimization_direction * current_loss)
+            current_loss = self.criterion(predictions, labels)
+            loss = torch.add(loss, self.optimization_direction * self.similarity_coeffs[arch] * current_loss)
 
-        loss = loss / len(self.surrogate_models)
         return loss
 
 
@@ -220,14 +263,14 @@ def main():
 
     attacker = Attacker(model, args_dict)
 
-    targets = torch.zeros(1000).cuda()
-    targets[TARGET_CLASS] = 1
-
     print('Loading dataset...')
     if args_dict['masks']:
         loader = torch.load(args_dict['dataset'])
     else:
-        dataset = robustness.datasets.ImageNet(args_dict['dataset'])
+        label_mapping = None
+        if not os.path.exists(os.path.join(args_dict['dataset'], 'val')):
+            label_mapping = imagenet_mapping
+        dataset = robustness.datasets.ImageNet(args_dict['dataset'], label_mapping=label_mapping)
         loader, _ = dataset.make_loaders(workers=10, batch_size=args_dict['batch_size'])
 
     print('Finished!\n')
@@ -237,25 +280,43 @@ def main():
     print('Starting PGD...')
     for index, batch in enumerate(loader):
         if args_dict['masks']:
-            images_batch, masks_batch = batch
-            labels_batch = torch.argmax(predict(model, images_batch.cuda()), dim=1)
-            if masks_batch.size != images_batch.size():
-                masks_batch = torch.ones_like(images_batch)
+            image_batch, mask_batch = batch
+            image_batch.unsqueeze_(0)
+            mask_batch.unsqueeze_(0)
+
+            label_batch = torch.argmax(predict(model, image_batch.cuda()), dim=1)
+            if mask_batch.size != image_batch.size():
+                mask_batch = torch.ones_like(image_batch)
         else:
-            images_batch, labels_batch = batch
-            masks_batch = torch.ones_like(images_batch)
+            image_batch, label_batch = batch
+            mask_batch = torch.ones_like(image_batch)
 
-        if not args_dict['targeted']:
-            targets = labels_batch
+        image_batch = image_batch.cuda()
+        mask_batch = mask_batch.cuda()
+        label_batch = label_batch.cuda()
 
-        adversarial_examples = attacker(images_batch.cuda(), masks_batch.cuda(), targets.cuda(), False)
+        if not args_dict['targeted'] and not args_dict['masks']:
+            predicted_label_batch = torch.argmax(predict(model, image_batch), dim=1)
+            matching_labels = torch.eq(label_batch, predicted_label_batch)
+            num_matching_labels = torch.sum(matching_labels)
+            if num_matching_labels == 0:
+                continue
+
+            image_batch, mask_batch, label_batch = (image_batch[matching_labels],
+                                                    mask_batch[matching_labels],
+                                                    label_batch[matching_labels])
+            targets = label_batch
+        else:
+            targets = TARGET_CLASS * torch.ones_like(label_batch)
+
+        adversarial_examples = attacker(image_batch, mask_batch, targets, False)
         adversarial_predictions = predict(model, adversarial_examples)
 
         adversarial_examples_list.append(adversarial_examples.cpu())
-        predictions_list.append({'original': labels_batch.cpu(),
+        predictions_list.append({'original': label_batch.cpu(),
                                  'adversarial': adversarial_predictions.cpu()})
 
-        if (index+2)*images_batch.size(0) > args_dict['num_samples']:
+        if (index + 2) * image_batch.size(0) > args_dict['num_samples']:
             break
 
     print('Finished!')
@@ -263,7 +324,7 @@ def main():
     print('Serializing results...')
     torch.save({'adversarial_examples': adversarial_examples_list,
                 'predictions': predictions_list,
-                'surrogates_list': SURROGATES_LIST_ALL,
+                'similarity': ALL_SIMILARITY_COEFFS,
                 'args_dict': args_dict},
                args_dict['save_file_location'])
     print('Finished!\n')

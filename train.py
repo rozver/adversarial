@@ -1,8 +1,8 @@
 import torch
-from pgd import Attacker
+from pgd import Attacker, PGD_DEFAULT_ARGS_DICT
 from dataset_utils import create_data_loaders, Normalizer
 from model_utils import ARCHS_LIST, predict, get_model, load_model
-from file_utils import validate_save_file_location
+from file_utils import validate_save_file_location, get_current_time
 import argparse
 import os
 
@@ -33,48 +33,56 @@ class Trainer:
             current_loss = 0.0
             images_loader, labels_loader = create_data_loaders(images, labels, shuffle=True)
 
-            for images_batch, labels_batch in zip(images_loader, labels_loader):
+            for image_batch, label_batch in zip(images_loader, labels_loader):
+                image_batch, label_batch = image_batch.cuda(), label_batch.cuda()
+
                 if self.adversarial:
-                    images_batch = self.create_adversarial_examples(images_batch, labels_batch)
+                    image_batch = self.create_adversarial_examples(image_batch, label_batch)
 
                 self.model = self.model.cuda().train()
-                predictions = predict(self.model, self.normalize(images_batch.cuda()))
+                predictions = predict(self.model, self.normalize(image_batch.cuda()))
 
                 self.optimizer.zero_grad()
-                loss = self.criterion(predictions, labels_batch.cuda())
+                loss = self.criterion(predictions, label_batch)
                 loss.backward()
                 self.optimizer.step()
 
-                current_loss += loss.item() * images_batch.size(0)
+                if self.training_args_dict['weight_averaging']:
+                    with torch.no_grad():
+                        old_parameters = self.model.parameters()
+                        for (name, parameter), old_parameter in zip(self.model.named_parameters(), old_parameters):
+                            if 'weight' in name:
+                                parameter.copy_((parameter + old_parameter) / 2)
+
+                        predictions = predict(self.model, self.normalize(image_batch))
+                        loss = self.criterion(predictions, label_batch)
+
+                current_loss += loss.item() * image_batch.size(0)
 
             epoch_loss = current_loss / len(images)
-            print('Epoch: {}/{} - Loss: {}'.format(str(epoch+1),
+            print('Epoch: {}/{} - Loss: {}'.format(str(epoch + 1),
                                                    str(self.training_args_dict['epochs']),
                                                    str(epoch_loss)))
 
             self.losses.append(epoch)
 
-    def create_adversarial_examples(self, images_batch, labels_batch):
+    def create_adversarial_examples(self, image_batch, label_batch):
         if self.attacker is None:
-            self.attacker = Attacker(self.model.cpu().eval(), self.pgd_args_dict)
+            self.attacker = Attacker(self.model.eval(), self.pgd_args_dict)
 
-        self.attacker.model = self.model.cpu().eval()
+        self.attacker.model = self.model.cuda().eval()
 
-        mask = None
-        adversarial_batch = None
+        mask_batch = None
 
-        for image, label in zip(images_batch, labels_batch):
-            if mask is None:
-                mask = torch.ones(image.size())
+        if mask_batch is None:
+            mask_batch = torch.ones_like(image_batch)
 
-            if adversarial_batch is None:
-                adversarial_batch = self.attacker(image=image, mask=mask, target=label, random_start=True).unsqueeze(0)
-                continue
+        adversarial_examples = self.attacker(image_batch,
+                                             mask_batch=mask_batch,
+                                             targets=label_batch,
+                                             random_start=True)
 
-            adversarial_example = self.attacker(image=image, mask=mask, target=label, random_start=True).unsqueeze(0)
-            adversarial_batch = torch.cat((adversarial_batch, adversarial_example), 0)
-
-        return adversarial_batch
+        return adversarial_examples
 
     def serialize(self):
         torch.save({'state_dict': self.model.state_dict(),
@@ -92,8 +100,9 @@ def main():
     parser.add_argument('--checkpoint_location', type=str, default=None)
     parser.add_argument('--epochs', type=int, default=1)
     parser.add_argument('--learning_rate', type=float, default=1e-2)
+    parser.add_argument('--weight_averaging', default=False, action='store_true')
     parser.add_argument('--adversarial', default=False, action='store_true')
-    parser.add_argument('--save_file_location', type=str, default='models/resnet50_robust.pt')
+    parser.add_argument('--save_file_location', type=str, default='models/' + str(get_current_time()) + '.pt')
     args_dict = vars(parser.parse_args())
 
     validate_save_file_location(args_dict['save_file_location'])
@@ -101,23 +110,16 @@ def main():
     if os.path.exists(args_dict['dataset']):
         dataset_properties = torch.load(args_dict['dataset'])
 
-        pgd_args_dict = {
-            'arch': args_dict['arch'],
-            'dataset': dataset_properties['images'],
-            'masks': False,
-            'eps': 32/255.0,
-            'norm': 'linf',
-            'step_size': 16/255.0,
-            'num_iterations': 1,
-            'targeted': False,
-            'eot': False,
-            'transfer': False,
-        }
+        pgd_args_dict = PGD_DEFAULT_ARGS_DICT
+        pgd_args_dict['arch'] = args_dict['arch']
+        pgd_args_dict['dataset'] = dataset_properties['images']
+        pgd_args_dict['eps'] = 32 / 255.0
+        pgd_args_dict['step_size'] = 32 / 255.0
 
         images = torch.load(dataset_properties['images'])
 
         if dataset_properties['labels'] is None:
-            eval_model = get_model(arch=args_dict['arch'],  parameters='standard')
+            eval_model = get_model(arch=args_dict['arch'], parameters='standard')
             normalize = Normalizer(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
             labels = [torch.argmax(eval_model(normalize(x.unsqueeze(0)))) for x in images]
         else:
