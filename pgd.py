@@ -299,9 +299,10 @@ def main():
             if num_matching_labels == 0:
                 continue
 
-            image_batch, mask_batch, targets = (image_batch[matching_labels],
-                                                mask_batch[matching_labels],
-                                                label_batch[matching_labels])
+            image_batch, mask_batch, label_batch = (image_batch[matching_labels],
+                                                    mask_batch[matching_labels],
+                                                    label_batch[matching_labels])
+            targets = label_batch
         else:
             targets = TARGET_CLASS * torch.ones_like(label_batch)
 
