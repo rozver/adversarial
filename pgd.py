@@ -281,6 +281,9 @@ def main():
     for index, batch in enumerate(loader):
         if args_dict['masks']:
             image_batch, mask_batch = batch
+            image_batch.unsqueeze_(0)
+            mask_batch.unsqueeze_(0)
+
             label_batch = torch.argmax(predict(model, image_batch.cuda()), dim=1)
             if mask_batch.size != image_batch.size():
                 mask_batch = torch.ones_like(image_batch)
@@ -292,7 +295,7 @@ def main():
         mask_batch = mask_batch.cuda()
         label_batch = label_batch.cuda()
 
-        if not args_dict['targeted']:
+        if not args_dict['targeted'] and not args_dict['masks']:
             predicted_label_batch = torch.argmax(predict(model, image_batch), dim=1)
             matching_labels = torch.eq(label_batch, predicted_label_batch)
             num_matching_labels = torch.sum(matching_labels)
