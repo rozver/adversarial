@@ -1,6 +1,7 @@
 import torch
 from torch.nn.functional import softmax
 from model_utils import ARCHS_LIST, predict, get_model
+from dataset_utils import load_imagenet
 from pgd import get_current_time, Attacker, PGD_DEFAULT_ARGS_DICT
 from gradient_analysis import get_gradient
 from transformations import Blur
@@ -129,7 +130,7 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', type=str, choices=ARCHS_LIST, default='resnet50')
-    parser.add_argument('--dataset', type=str, default='dataset/imagenet-airplanes-images.pt')
+    parser.add_argument('--dataset', type=str, default='dataset/imagenet')
     parser.add_argument('--gradient_priors', default=False, action='store_true')
     parser.add_argument('--attack_type', type=str, choices=['nes', 'simba'], default='simba')
     parser.add_argument('--conv', default=False, action='store_true')
@@ -146,7 +147,8 @@ def main():
 
     model = get_model(args_dict['model'], parameters='standard').cuda().eval()
 
-    dataset = torch.load(args_dict['dataset'])
+    dataset = load_imagenet(args_dict['dataset'])
+    loader, _ = dataset.make_loaders(workers=10, batch_size=1)
 
     adversarial_examples_list = []
     predictions_list = []
@@ -165,13 +167,16 @@ def main():
             else:
                 substitute_model = get_model(args_dict['substitute_model'], parameters='standard').cuda().eval()
 
-    for index, image in enumerate(dataset):
+    for index, (image, label) in enumerate(loader):
         with torch.no_grad():
-            original_prediction = predict(model, image.cuda().unsqueeze(0))
-        label = torch.argmax(original_prediction, dim=1)
+            original_prediction = predict(model, image.cuda())
+            predicted_label = torch.argmax(original_prediction, dim=1)
+            if label.item() != predicted_label.item():
+                continue
 
         criterion = torch.nn.CrossEntropyLoss(reduction='none')
 
+        image.squeeze_(0)
         delta = attack(model, image.cuda(), label.cuda(), args_dict, substitute_model, criterion, pgd_attacker)
         adversarial_example = (image.cuda() + delta).clamp(0, 1)
 

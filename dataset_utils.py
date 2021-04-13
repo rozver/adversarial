@@ -6,6 +6,7 @@ import matplotlib
 from matplotlib import pyplot as plt
 from torchvision.transforms import transforms
 from torchvision.utils import save_image
+import robustness
 import datasets
 from model_utils import get_model
 import os
@@ -78,6 +79,14 @@ def inspect_dataset(dataset):
         else:
             plt.imshow(entry.permute(1, 2, 0))
             plt.show()
+
+
+def load_imagenet(location):
+    label_mapping = None
+    if os.path.exists(os.path.join(location, 'custom_mapping.txt')):
+        label_mapping = imagenet_mapping
+    dataset = robustness.datasets.ImageNet(location, label_mapping=label_mapping)
+    return dataset
 
 
 class Normalizer(torch.nn.Module, ABC):
