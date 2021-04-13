@@ -217,7 +217,7 @@ class Attacker:
 
         if self.args_dict['similarity_coeffs']:
             scores_reversed = torch.FloatTensor([model_scores[arch] for arch in surrogates_list][::-1])
-            coeffs = scores_reversed / torch.sum(scores_reversed)
+            coeffs = (scores_reversed / torch.sum(scores_reversed)).tolist()
         else:
             coeffs = [1 / len(surrogates_list)] * len(surrogates_list)
 
