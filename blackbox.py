@@ -8,7 +8,6 @@ from transformations import Blur
 from file_utils import validate_save_file_location
 import random
 import argparse
-import sys
 
 
 def get_simba_gradient(model, x, y, criterion, similarity_coeffs):
