@@ -1,15 +1,12 @@
 import torch
-import robustness
 from pgd_attack_steps import LinfStep, L2Step
 from model_utils import ARCHS_LIST, get_model, load_model, predict
-from dataset_utils import imagenet_mapping
+from dataset_utils import load_imagenet
 from transformations import get_random_transformation
 from file_utils import get_current_time, validate_save_file_location
-from collections import defaultdict
 import argparse
 import random
 import copy
-import os
 
 TARGET_CLASS = 934
 ALL_SIMILARITY_COEFFS = []
@@ -265,10 +262,7 @@ def main():
     if args_dict['masks']:
         loader = torch.load(args_dict['dataset'])
     else:
-        label_mapping = None
-        if not os.path.exists(os.path.join(args_dict['dataset'], 'val')):
-            label_mapping = imagenet_mapping
-        dataset = robustness.datasets.ImageNet(args_dict['dataset'], label_mapping=label_mapping)
+        dataset = load_imagenet(args_dict['dataset'])
         loader, _ = dataset.make_loaders(workers=10, batch_size=args_dict['batch_size'])
 
     print('Finished!\n')
