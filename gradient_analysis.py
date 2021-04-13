@@ -51,7 +51,7 @@ def get_grad_dict(model, criterion, args_dict):
                 prediction = predict(model, image.cuda())
                 label = torch.argmax(prediction, dim=1).cuda()
 
-                current_grad = get_gradient(model, image, label, criterion)
+                current_grad = get_gradient(model, image, label, criterion, None)
                 category_grads.append(current_grad.cpu())
 
             grads_dict[dataset.category] = category_grads
@@ -84,11 +84,11 @@ def get_averages(grad, mask):
     grad_abs = grad*torch.sign(grad)
 
     num_values = mask.size(0) * mask.size(1) * mask.size(2)
-    num_ones = torch.sum(mask)
+    num_ones = torch.sum(mask).item()
     num_zeros = num_values - num_ones
 
-    foreground_grad_sum = torch.sum(grad_abs * mask)
-    background_grad_sum = torch.sum(grad_abs) - foreground_grad_sum
+    foreground_grad_sum = torch.sum(grad_abs * mask).item()
+    background_grad_sum = torch.sum(grad_abs) - foreground_grad_sum.item()
 
     foreground_grad_average = foreground_grad_sum / num_ones
     background_grad_average = background_grad_sum / num_zeros
@@ -107,7 +107,7 @@ def get_category_average(grads, dataset):
     foreground_average /= dataset.__len__()
     background_average /= dataset.__len__()
 
-    return foreground_average.cpu(), background_average.cpu()
+    return foreground_average, background_average
 
 
 def get_averages_by_category(grads_dict, args_dict):

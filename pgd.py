@@ -189,8 +189,7 @@ class Attacker:
         return best_x.cuda()
 
     def selective_transfer(self, image_batch, mask_batch, original_labels, step):
-        model_scores = {}
-        model_scores = defaultdict(lambda: 0, model_scores)
+        model_scores = dict(zip(self.available_surrogates_list, [0]*len(self.available_surrogates_list)))
         mse_criterion = torch.nn.MSELoss(reduction='mean')
         batch_indices = torch.arange(image_batch.size(0))
 
@@ -211,15 +210,14 @@ class Attacker:
 
                 current_loss = mse_criterion(current_predictions[batch_indices, labels],
                                              predictions[batch_indices, labels])
-                model_scores[arch] += current_loss
-
+                model_scores[arch] += current_loss.item()
         surrogates_list = [arch
                            for arch in sorted(model_scores, key=model_scores.get)
                            [:self.args_dict['num_surrogates']]]
 
         if self.args_dict['similarity_coeffs']:
             scores_reversed = torch.FloatTensor([model_scores[arch] for arch in surrogates_list][::-1])
-            coeffs = torch.nn.functional.softmax(scores_reversed, dim=0).tolist()
+            coeffs = (scores_reversed / torch.sum(scores_reversed)).tolist()
         else:
             coeffs = [1 / len(surrogates_list)] * len(surrogates_list)
 
