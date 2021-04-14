@@ -130,6 +130,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', type=str, choices=ARCHS_LIST, default='resnet50')
     parser.add_argument('--dataset', type=str, default='dataset/imagenet')
+    parser.add_argument('--num_samples', type=int, default=50)
     parser.add_argument('--gradient_priors', default=False, action='store_true')
     parser.add_argument('--attack_type', type=str, choices=['nes', 'simba'], default='simba')
     parser.add_argument('--conv', default=False, action='store_true')
@@ -185,6 +186,9 @@ def main():
         adversarial_examples_list.append(adversarial_example.cpu())
         predictions_list.append({'original': original_prediction.cpu(),
                                  'adversarial': adversarial_prediction.cpu()})
+
+        if index == args_dict['num_samples'] - 1:
+            break
 
     torch.save({'adversarial_examples': adversarial_examples_list,
                 'predictions': predictions_list,
