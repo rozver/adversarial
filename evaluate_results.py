@@ -6,8 +6,7 @@ from matplotlib import pyplot as plt
 
 ARGS_DICT_KEYS_PGD = ['arch', 'checkpoint_location', 'from_robustness', 'dataset', 'masks', 'eps', 'norm',
                       'step_size', 'num_iterations', 'targeted', 'eot', 'transfer', 'save_file_location']
-ARGS_DICT_KEYS_BLACKBOX = ['model', 'dataset', 'gradient_masks', 'attack_type',
-                           'gradient_model', 'eps', 'num_iterations', 'save_file_location']
+ARGS_DICT_KEYS_BLACKBOX = ['model', 'dataset', 'attack_type', 'eps', 'num_iterations', 'save_file_location']
 
 
 def has_wrong_args(results, results_location):
