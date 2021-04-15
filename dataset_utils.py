@@ -13,7 +13,6 @@ import os
 from abc import ABC
 import shutil
 import json
-import ast
 
 
 def normalize_names(location):
