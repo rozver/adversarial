@@ -16,7 +16,8 @@ def get_simba_gradient(model, x, y, criterion, similarity_coeffs, mask):
 
 
 def normalize_gradient_vector(grad_vector):
-    grad_normalized = softmax(torch.abs(grad_vector), dim=0)
+    grad_abs = torch.abs(grad_vector)
+    grad_normalized = grad_abs/torch.sum(grad_abs)
     return grad_normalized.tolist()
 
 
@@ -63,7 +64,7 @@ def simba(model, x, y, mask, args_dict, substitute_model, criterion, pgd_attacke
 
     else:
         perm = range(0, x.size().numel())
-        available_coordinates = torch.flatten(mask.clone())
+        available_coordinates = torch.flatten(mask.clone()).cuda()
 
     for iteration in range(args_dict['num_iterations']):
         if args_dict['gradient_priors']:
