@@ -7,7 +7,7 @@ from pgd import get_current_time
 import os
 
 
-def get_gradient(model, x, label, criterion, similarity_coeffs):
+def get_gradient(model, x, label, criterion, similarity_coeffs=None, mask=None):
     x = autograd.Variable(x, requires_grad=True).cuda()
 
     if type(model) is list:
@@ -24,8 +24,11 @@ def get_gradient(model, x, label, criterion, similarity_coeffs):
         prediction = predict(model, x)
         loss = criterion(prediction, label)
 
-    grad = autograd.grad(loss, x)[0]
-    return grad.cpu()
+    if mask is not None:
+        x.register_hook(lambda grad: grad * mask.float())
+
+    gradient = autograd.grad(loss, x)[0]
+    return gradient.cpu()
 
 
 def get_sorted_order(grad, size):
@@ -35,28 +38,6 @@ def get_sorted_order(grad, size):
 
     order = torch.argsort(grad.cpu(), descending=True)[:size]
     return order
-
-
-def get_grad_dict(model, criterion, args_dict):
-    grads_dict = {}
-
-    for category_file in os.listdir(args_dict['dataset']):
-        category_grads = []
-        if category_file.endswith('.pt'):
-            dataset = torch.load(os.path.join(args_dict['dataset'], category_file))
-
-            if dataset.__len__() == 0:
-                continue
-            for image, _ in dataset:
-                prediction = predict(model, image.cuda())
-                label = torch.argmax(prediction, dim=1).cuda()
-
-                current_grad = get_gradient(model, image, label, criterion, None)
-                category_grads.append(current_grad.cpu())
-
-            grads_dict[dataset.category] = category_grads
-
-    return grads_dict
 
 
 def normalize_grad(grad):
@@ -80,32 +61,24 @@ def normalize_grads_dict(grads_dict):
     return grads_dict
 
 
-def get_averages(grad, mask):
-    grad_abs = grad*torch.sign(grad)
-
-    num_values = mask.size(0) * mask.size(1) * mask.size(2)
-    num_ones = torch.sum(mask).item()
-    num_zeros = num_values - num_ones
-
-    foreground_grad_sum = torch.sum(grad_abs * mask).item()
-    background_grad_sum = torch.sum(grad_abs) - foreground_grad_sum.item()
-
-    foreground_grad_average = foreground_grad_sum / num_ones
-    background_grad_average = background_grad_sum / num_zeros
-    return foreground_grad_average, background_grad_average
+def get_average(grad):
+    grad_abs = torch.abs(grad)
+    average = torch.sum(grad_abs).item() / grad_abs[grad_abs != 0].size().numel()
+    return average
 
 
-def get_category_average(grads, dataset):
+def get_category_average(grads, dataset_length):
     foreground_average = 0
     background_average = 0
 
-    for grad, (_, mask) in zip(grads, dataset):
-        foreground_grad_average, background_grad_average = get_averages(grad, mask)
+    for foreground_grad, background_grad in grads:
+        foreground_grad_average = get_average(foreground_grad)
+        background_grad_average = get_average(background_grad)
         foreground_average += foreground_grad_average
         background_average += background_grad_average
 
-    foreground_average /= dataset.__len__()
-    background_average /= dataset.__len__()
+    foreground_average /= dataset_length
+    background_average /= dataset_length
 
     return foreground_average, background_average
 
@@ -129,16 +102,19 @@ def get_averages_dict(model, criterion, args_dict):
 
             if dataset.__len__() == 0:
                 continue
-            for image, _ in dataset:
+            for image, mask in dataset:
                 prediction = predict(model, image.cuda())
                 label = torch.argmax(prediction, dim=1).cuda()
 
-                current_grad = get_gradient(model, image, label, criterion)
-                if args_dict['normalize_grads']:
-                    current_grad = normalize_grad(current_grad)
-                category_grads.append(current_grad.cpu())
+                grad = get_gradient(model, image, label, criterion)
+                foreground_grad = grad*mask
+                background_grad = grad - foreground_grad
 
-            foreground_average, background_average = get_category_average(category_grads, dataset)
+                if args_dict['normalize_grads']:
+                    foreground_grad, background_grad = normalize_grad(foreground_grad), normalize_grad(background_grad)
+                category_grads.append([foreground_grad.cpu(), background_grad.cpu()])
+
+            foreground_average, background_average = get_category_average(category_grads, dataset.__len__())
             averages_dict[dataset.category] = [foreground_average, background_average]
 
     return averages_dict
