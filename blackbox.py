@@ -10,8 +10,8 @@ import random
 import argparse
 
 
-def get_simba_gradient(model, x, y, criterion, similarity_coeffs):
-    grad = get_gradient(model, x, y, criterion, similarity_coeffs)
+def get_simba_gradient(model, x, y, criterion, similarity_coeffs, mask):
+    grad = get_gradient(model, x, y, criterion, similarity_coeffs, mask)
     return grad
 
 
@@ -35,7 +35,7 @@ def get_tensor_coordinate_indices(coordinate, size):
     return c, w, h
 
 
-def simba(model, x, y, args_dict, substitute_model, criterion, pgd_attacker):
+def simba(model, x, y, mask, args_dict, substitute_model, criterion, pgd_attacker):
     delta = torch.zeros_like(x).cuda()
     q = torch.zeros_like(x).cuda()
     available_coordinates = None
@@ -53,14 +53,21 @@ def simba(model, x, y, args_dict, substitute_model, criterion, pgd_attacker):
     p = get_probabilities(model, x, y)
 
     if not args_dict['gradient_priors']:
-        perm = torch.randperm(x.size().numel()).tolist()
+        perm = torch.randperm(x.size().numel()).cuda()
+        perm = (perm + 1) * torch.flatten(mask)
+        perm = perm[perm != 0] - 1
+
+        if perm.size(0) < args_dict['num_iterations']:
+            print('The specified number of iterations is more than the available coordinates!')
+            args_dict['num_iterations'] = perm.size(0)
+
     else:
         perm = range(0, x.size().numel())
-        available_coordinates = torch.ones(x.size().numel())
+        available_coordinates = torch.flatten(mask.clone())
 
     for iteration in range(args_dict['num_iterations']):
         if args_dict['gradient_priors']:
-            grad = get_simba_gradient(substitute_model, x + delta, y, criterion, similarity_coeffs)
+            grad = get_simba_gradient(substitute_model, x + delta, y, criterion, similarity_coeffs, mask)
             distribution = torch.flatten(grad)
             distribution_normalized = normalize_gradient_vector(distribution*available_coordinates)
             coordinate = random.choices(perm, distribution_normalized)[0]
@@ -71,7 +78,7 @@ def simba(model, x, y, args_dict, substitute_model, criterion, pgd_attacker):
                 delta = torch.clamp(delta, -args_dict['eps'], args_dict['eps'])
 
         else:
-            coordinate = perm[iteration]
+            coordinate = int(perm[iteration].item())
 
         c, w, h = get_tensor_coordinate_indices(coordinate, x.size())
 
@@ -130,6 +137,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', type=str, choices=ARCHS_LIST, default='resnet50')
     parser.add_argument('--dataset', type=str, default='dataset/imagenet')
+    parser.add_argument('--masks', default=False, action='store_true')
     parser.add_argument('--num_samples', type=int, default=50)
     parser.add_argument('--gradient_priors', default=False, action='store_true')
     parser.add_argument('--attack_type', type=str, choices=['nes', 'simba'], default='simba')
@@ -147,8 +155,11 @@ def main():
 
     model = get_model(args_dict['model'], parameters='standard').cuda().eval()
 
-    dataset = load_imagenet(args_dict['dataset'])
-    loader, _ = dataset.make_loaders(workers=10, batch_size=1)
+    if not args_dict['masks']:
+        dataset = load_imagenet(args_dict['dataset'])
+        loader, _ = dataset.make_loaders(workers=10, batch_size=1)
+    else:
+        loader = torch.load(args_dict['dataset'])
 
     adversarial_examples_list = []
     predictions_list = []
@@ -167,17 +178,27 @@ def main():
             else:
                 substitute_model = get_model(args_dict['substitute_model'], parameters='standard').cuda().eval()
 
-    for index, (image, label) in enumerate(loader):
-        with torch.no_grad():
+    for index, entry in enumerate(loader):
+        if args_dict['masks']:
+            image, mask = entry
+            image.unsqueeze_(0)
             original_prediction = predict(model, image.cuda())
-            predicted_label = torch.argmax(original_prediction, dim=1)
-            if label.item() != predicted_label.item():
-                continue
+            label = torch.argmax(original_prediction, dim=1)
+        else:
+            image, label = entry
+            mask = torch.ones_like(image)
+
+            with torch.no_grad():
+                original_prediction = predict(model, image.cuda())
+                predicted_label = torch.argmax(original_prediction, dim=1)
+                if label.item() != predicted_label.item():
+                    continue
 
         criterion = torch.nn.CrossEntropyLoss(reduction='none')
 
         image.squeeze_(0)
-        delta = attack(model, image.cuda(), label.cuda(), args_dict, substitute_model, criterion, pgd_attacker)
+        delta = attack(model, image.cuda(), label.cuda(), mask.cuda(),
+                       args_dict, substitute_model, criterion, pgd_attacker)
         adversarial_example = (image.cuda() + delta).clamp(0, 1)
 
         with torch.no_grad():
