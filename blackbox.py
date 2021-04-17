@@ -12,7 +12,7 @@ import argparse
 
 def get_simba_gradient(model, x, y, criterion, similarity_coeffs, mask):
     grad = get_gradient(model, x, y, criterion, similarity_coeffs, mask)
-    return grad
+    return grad.cuda()
 
 
 def normalize_gradient_vector(grad_vector):
@@ -48,6 +48,7 @@ def simba(model, x, y, mask, args_dict, substitute_model, criterion, pgd_attacke
         x.unsqueeze_(0)
         step = pgd_attacker.attack_step(x, 25/255.0, 1/255.0)
         substitute_model = pgd_attacker.selective_transfer(x, torch.ones_like(x), y, step)
+        print(substitute_model)
         similarity_coeffs = pgd_attacker.similarity_coeffs
         x.squeeze_()
 
@@ -64,7 +65,7 @@ def simba(model, x, y, mask, args_dict, substitute_model, criterion, pgd_attacke
 
     else:
         perm = range(0, x.size().numel())
-        available_coordinates = torch.flatten(mask.clone()).cuda()
+        available_coordinates = torch.flatten(mask.clone())
 
     for iteration in range(args_dict['num_iterations']):
         if args_dict['gradient_priors']:

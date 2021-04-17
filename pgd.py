@@ -204,10 +204,12 @@ class Attacker:
             for arch in self.available_surrogates_list:
                 current_model = get_model(arch, 'standard', freeze=True).cuda().eval()
                 current_predictions = predict(current_model, x)
+                current_model.cpu()
 
                 current_loss = mse_criterion(current_predictions[batch_indices, labels],
                                              predictions[batch_indices, labels])
                 model_scores[arch] += current_loss.item()
+
         surrogates_list = [arch
                            for arch in sorted(model_scores, key=model_scores.get)
                            [:self.args_dict['num_surrogates']]]
