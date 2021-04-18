@@ -313,9 +313,9 @@ def main():
 
         total_num_samples += image_batch.size(0)
         if total_num_samples >= args_dict['num_samples']:
-            args_dict['num_samples'] = total_num_samples
             break
 
+    args_dict['num_samples'] = total_num_samples
     print('Finished!')
 
     print('Serializing results...')
