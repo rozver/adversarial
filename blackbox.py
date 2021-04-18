@@ -146,7 +146,7 @@ def main():
     parser.add_argument('--substitute_model', type=str, choices=ARCHS_LIST, default='resnet152')
     parser.add_argument('--ensemble_selection', default=False, action='store_true')
     parser.add_argument('--transfer', default=False, action='store_true')
-    parser.add_argument('--eps', type=float, default=10)
+    parser.add_argument('--eps', type=float, default=1)
     parser.add_argument('--step_size', type=float, default=1/255.0)
     parser.add_argument('--num_iterations', type=int, default=1)
     parser.add_argument('--save_file_location', type=str, default='results/blackbox/' + time + '.pt')
