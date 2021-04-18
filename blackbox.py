@@ -48,7 +48,6 @@ def simba(model, x, y, mask, args_dict, substitute_model, criterion, pgd_attacke
         x.unsqueeze_(0)
         step = pgd_attacker.attack_step(x, 25/255.0, 1/255.0)
         substitute_model = pgd_attacker.selective_transfer(x, torch.ones_like(x), y, step)
-        print(substitute_model)
         similarity_coeffs = pgd_attacker.similarity_coeffs
         x.squeeze_()
 
