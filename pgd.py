@@ -266,8 +266,9 @@ def main():
     else:
         dataset = load_imagenet(args_dict['dataset'])
         loader, _ = dataset.make_loaders(workers=10, batch_size=args_dict['batch_size'])
-
     print('Finished!\n')
+
+    total_num_samples = 0
     adversarial_examples_list = []
     predictions_list = []
 
@@ -310,7 +311,9 @@ def main():
         predictions_list.append({'original': label_batch.cpu(),
                                  'adversarial': adversarial_predictions.cpu()})
 
-        if (index + 2) * image_batch.size(0) > args_dict['num_samples']:
+        total_num_samples += image_batch.size(0)
+        if total_num_samples >= args_dict['num_samples']:
+            args_dict['num_samples'] = total_num_samples
             break
 
     print('Finished!')
