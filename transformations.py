@@ -56,11 +56,13 @@ class Transformation:
         self.algorithm = 1
 
     def __call__(self, x):
+        parameters_are_none = False
         if len(x.size()) != 4:
             x = x.unsqueeze(0)
 
         if self.parameters is None:
-            self.parameters = [self.get_random_parameters() for i in range(x.size(0))]
+            parameters_are_none = True
+            self.parameters = [self.get_random_parameters() for _ in range(x.size(0))]
 
         x_chunks = torch.chunk(x, x.size(0), dim=0)
         x_chunks_transformed = []
@@ -69,7 +71,9 @@ class Transformation:
             x_chunks_transformed.append(self.transform(x_chunks[index], index))
         x = torch.cat(x_chunks_transformed, 0)
 
-        self.parameters = None
+        if parameters_are_none:
+            self.parameters = None
+
         return x
 
     def get_random_parameters(self):
