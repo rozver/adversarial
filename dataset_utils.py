@@ -67,17 +67,20 @@ def inspect_dataset(dataset):
         dataset = torch.load(dataset)
 
     for entry in dataset:
-        if len(entry) == 2:
-            image, mask = entry
-            fig = plt.figure()
-            fig.add_subplot(1, 2, 1)
-            plt.imshow(image.permute(1, 2, 0))
-            fig.add_subplot(1, 2, 2)
-            plt.imshow(mask.permute(1, 2, 0))
-            plt.show()
+        if type(entry == tuple):
+            if len(entry[1].size()) == 1:
+                images, _ = entry
+                plot(images)
+            else:
+                image, mask = entry
+                fig = plt.figure()
+                fig.add_subplot(1, 2, 1)
+                plt.imshow(image.permute(1, 2, 0))
+                fig.add_subplot(1, 2, 2)
+                plt.imshow(mask.permute(1, 2, 0))
+                plt.show()
         else:
-            plt.imshow(entry.permute(1, 2, 0))
-            plt.show()
+            plot(entry)
 
 
 def load_imagenet(location):
