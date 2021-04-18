@@ -154,7 +154,7 @@ def main():
 
     validate_save_file_location(args_dict['save_file_location'])
 
-    model = get_model(args_dict['model'], parameters='standard').cuda().eval()
+    model = get_model(args_dict['model'], parameters='standard', freeze=True).cuda().eval()
 
     if not args_dict['masks']:
         dataset = load_imagenet(args_dict['dataset'])
@@ -177,7 +177,8 @@ def main():
                 pgd_attacker.available_surrogates_list = ARCHS_LIST
                 pgd_attacker.available_surrogates_list.remove(args_dict['model'])
             else:
-                substitute_model = get_model(args_dict['substitute_model'], parameters='standard').cuda().eval()
+                substitute_model = get_model(args_dict['substitute_model'],
+                                             parameters='standard', freeze=True).cuda().eval()
 
     for index, entry in enumerate(loader):
         if args_dict['masks']:
