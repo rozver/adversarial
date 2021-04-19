@@ -75,7 +75,7 @@ def simba(model, x, y, mask, args_dict, substitute_model, criterion, pgd_attacke
             available_coordinates[coordinate] = 0
 
             if args_dict['transfer']:
-                delta = delta + args_dict['step_size']*torch.sign(grad.cuda())
+                delta = delta + args_dict['step_size']*torch.sign(grad.cuda())*available_coordinates.view(delta.size())
                 delta = torch.clamp(delta, -args_dict['eps'], args_dict['eps'])
 
         else:
