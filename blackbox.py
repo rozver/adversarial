@@ -41,6 +41,7 @@ def simba(model, x, y, mask, args_dict, substitute_model, criterion, pgd_attacke
     q = torch.zeros_like(x).cuda()
     available_coordinates = None
     similarity_coeffs = None
+    distribution = None
     conv = Blur()
     conv.parameters = [(9, 3)]
 
@@ -68,15 +69,18 @@ def simba(model, x, y, mask, args_dict, substitute_model, criterion, pgd_attacke
 
     for iteration in range(args_dict['num_iterations']):
         if args_dict['gradient_priors']:
-            grad = get_simba_gradient(substitute_model, x + delta, y, criterion, similarity_coeffs, mask)
-            distribution = torch.flatten(grad)
-            distribution_normalized = normalize_gradient_vector(distribution*available_coordinates)
+            if iteration % args_dict['grad_iterations'] == 0:
+                grad = get_simba_gradient(substitute_model, x + delta, y, criterion, similarity_coeffs, mask)
+                distribution = torch.flatten(grad)
+
+                if args_dict['transfer']:
+                    delta = delta + args_dict['step_size'] * torch.sign(grad.cuda()) * available_coordinates.view(
+                        delta.size())
+                    delta = torch.clamp(delta, -args_dict['eps'], args_dict['eps'])
+
+            distribution_normalized = normalize_gradient_vector(distribution * available_coordinates)
             coordinate = random.choices(perm, distribution_normalized)[0]
             available_coordinates[coordinate] = 0
-
-            if args_dict['transfer']:
-                delta = delta + args_dict['step_size']*torch.sign(grad.cuda())*available_coordinates.view(delta.size())
-                delta = torch.clamp(delta, -args_dict['eps'], args_dict['eps'])
 
         else:
             coordinate = int(perm[iteration].item())
@@ -141,6 +145,7 @@ def main():
     parser.add_argument('--masks', default=False, action='store_true')
     parser.add_argument('--num_samples', type=int, default=50)
     parser.add_argument('--gradient_priors', default=False, action='store_true')
+    parser.add_argument('--grad_iterations', type=int, default=32)
     parser.add_argument('--attack_type', type=str, choices=['nes', 'simba'], default='simba')
     parser.add_argument('--conv', default=False, action='store_true')
     parser.add_argument('--substitute_model', type=str, choices=ARCHS_LIST, default='resnet152')
