@@ -13,8 +13,7 @@ def get_transformation_bounds_dict():
     bounds_dict = {
         'light': [-0.1, 0.1],
         'noise': [0.0, 0.05],
-        'blur': [0, 8],
-        'blur_kernel_length': [0, 8],
+        'blur': [0, 0.1],
         'translation': [-10.0, 10.0],
         'rotation': [-10, 10],
     }
@@ -130,7 +129,7 @@ class Blur(Transformation):
         max_kernel_length = min(x.size(2), x.size(3))//8
 
         if kernel_length == 0 or kernel_length >= max_kernel_length:
-            kernel_length = random.randint(1,  max_kernel_length)
+            kernel_length = random.randint(5,  max_kernel_length)
 
         kernel = gaussian_kernel(kernel_length, sigma)
         kernel = kernel.view(1, 1, kernel_length, kernel_length)
