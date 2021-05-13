@@ -13,7 +13,7 @@ def get_transformation_bounds_dict():
     bounds_dict = {
         'light': [-0.1, 0.1],
         'noise': [0.0, 0.05],
-        'blur': [0, 0.1],
+        'blur': [0, 1],
         'translation': [-10.0, 10.0],
         'rotation': [-10, 10],
     }
