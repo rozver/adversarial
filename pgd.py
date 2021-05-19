@@ -267,7 +267,7 @@ def main():
         loader = torch.load(args_dict['dataset'])
     else:
         dataset = load_imagenet(args_dict['dataset'])
-        loader, _ = dataset.make_loaders(workers=10, batch_size=args_dict['batch_size'])
+        loader, _ = dataset.make_loaders(batch_size=args_dict['batch_size'], workers=10)
     print('Finished!\n')
 
     total_num_samples = 0
