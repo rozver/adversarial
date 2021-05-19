@@ -98,6 +98,14 @@ def weight_reset(m):
         m.reset_parameters()
 
 
+def to_device(x, device):
+    if x.device != device:
+        x = x.to(device)
+        if type(x) != torch.Tensor:
+            x.device = device
+    return x
+
+
 def get_archs_dict():
     torchvision_models_dict = dict.fromkeys(TORCHVISION_ARCHS, 'torchvision')
     pretrainedmodels_dict = dict.fromkeys(PRETRAINEDMODELS_ARCHS, 'pretrainedmodels')
@@ -123,7 +131,7 @@ def convert_to_robustness(model, state_dict):
     return model, state_dict
 
 
-def get_model(arch, parameters=None, freeze=False):
+def get_model(arch, parameters=None, freeze=False, device='cpu'):
     if arch in ARCHS_LIST:
         archs_dict = get_archs_dict()
         loader = LOADERS[archs_dict[arch]]
@@ -137,13 +145,17 @@ def get_model(arch, parameters=None, freeze=False):
                 model = loader.__dict__[arch](*parameters)
             else:
                 model = loader.__dict__[arch](*parameters[:1])
+
             model.arch = arch
+            model.device = 'cpu'
 
             if archs_dict[arch] == 'pretrainedmodels' and len(parameters) == 0:
                 model.apply(weight_reset)
 
             if freeze:
                 model = freeze_parameters(model)
+
+            model = to_device(model, device)
             return model
 
         else:
@@ -179,6 +191,7 @@ def load_model(location, arch=None, from_robustness=False):
         state_dict = get_state_dict(location=location)
         model = get_model(arch=arch, parameters=None)
         model.load_state_dict(state_dict)
+
         return model
     else:
         raise ValueError('Invalid checkpoint location')
