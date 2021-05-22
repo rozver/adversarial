@@ -87,7 +87,6 @@ def main():
                 targets = torch.argmax(targets, dim=1)
 
             adversarial_classes = torch.argmax(predictions['adversarial'], dim=1)
-            print(adversarial_classes)
 
             attack_success = torch.eq(adversarial_classes, targets)
 
