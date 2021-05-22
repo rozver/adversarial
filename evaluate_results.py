@@ -82,22 +82,24 @@ def main():
             results['args_dict']['masks'] = False
 
         for predictions in results['predictions']:
-            original_classes = predictions['original']
-            if len(original_classes.size()) == 2:
-                original_classes = torch.argmax(original_classes, dim=1)
+            targets = predictions['original']
+            if len(targets.size()) == 2:
+                targets = torch.argmax(targets, dim=1)
 
             adversarial_classes = torch.argmax(predictions['adversarial'], dim=1)
+            print(adversarial_classes)
 
-            successful_attacks += torch.sum(~torch.eq(adversarial_classes, original_classes)).item()
+            attack_success = torch.eq(adversarial_classes, targets)
+
+            if not results['args_dict'].get('targeted', False):
+                attack_success = ~attack_success
+
+            successful_attacks += torch.sum(attack_success).item()
 
         if 'num_samples' in results['args_dict'].keys():
             num_samples = results['args_dict']['num_samples']
         else:
             num_samples = len(results['predictions'])
-
-        if 'targeted' in results['args_dict']:
-            if results['args_dict']['targeted']:
-                successful_attacks = num_samples - successful_attacks
 
         success_rate = round(successful_attacks / num_samples, 2)
         setups_and_results.append(str(results['args_dict']) + '\nAttack success rate: ' +

@@ -7,7 +7,6 @@ from file_utils import get_current_time, validate_save_file_location
 import argparse
 import random
 import copy
-import sys
 
 TARGET_CLASS = 934
 ALL_SIMILARITY_COEFFS = []
@@ -323,7 +322,7 @@ def main():
         adversarial_predictions = predict(model, adversarial_examples)
 
         adversarial_examples_list.append(to_device(adversarial_examples, device='cpu'))
-        predictions_list.append({'original': to_device(label_batch, device='cpu'),
+        predictions_list.append({'original': to_device(targets, device='cpu'),
                                  'adversarial': to_device(adversarial_predictions, device='cpu')})
 
         total_num_samples += image_batch.size(0)
