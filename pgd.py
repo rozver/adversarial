@@ -223,9 +223,7 @@ class Attacker:
                                              predictions[index][batch_indices, labels[index]])
                 model_scores[arch] += current_loss.item()
 
-            del current_model
-            if self.args_dict['device'] == 'cuda':
-                torch.cuda.empty_cache()
+            to_device(current_model, 'cpu')
 
         surrogates_list = [arch
                            for arch in sorted(model_scores, key=model_scores.get)
@@ -255,9 +253,7 @@ class Attacker:
         for arch, current_model in zip(self.similarity_coeffs.keys(), self.surrogate_models):
             predictions = predict(to_device(current_model, self.args_dict['device']), x)
 
-            del current_model
-            if self.args_dict['device'] == 'cuda':
-                torch.cuda.empty_cache()
+            to_device(current_model, 'cpu')
 
             current_loss = self.criterion(predictions, labels)
             loss = torch.add(loss, self.optimization_direction * self.similarity_coeffs[arch] * current_loss)
