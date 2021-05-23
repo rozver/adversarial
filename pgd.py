@@ -189,7 +189,7 @@ class Attacker:
 
         return best_x
 
-    def selective_transfer(self, image_batch, mask_batch, original_labels, step):
+    def selective_transfer(self, image_batch, mask_batch, targets, step):
         model_scores = dict(zip(self.available_surrogates_list, [0] * len(self.available_surrogates_list)))
         mse_criterion = torch.nn.MSELoss(reduction='mean')
         batch_indices = torch.arange(image_batch.size(0))
@@ -204,10 +204,15 @@ class Attacker:
         labels = []
         for current_x in x:
             predictions.append(predict(self.model, current_x))
-            labels.append(torch.argmax(predictions[-1], dim=1))
+            current_labels = torch.argmax(predictions[-1], dim=1)
+
+            if not self.args_dict['targeted']:
+                labels.append(current_labels)
+            else:
+                labels.append(targets)
 
             self.args_dict['label_shifts'] += (len(labels) - torch.sum(torch.eq(labels[-1],
-                                                                                original_labels[-1])).item())
+                                                                                current_labels[-1])).item())
 
         for arch in self.available_surrogates_list:
             current_model = get_model(arch, 'standard', freeze=True, device=self.args_dict['device']).eval()
@@ -218,7 +223,9 @@ class Attacker:
                                              predictions[index][batch_indices, labels[index]])
                 model_scores[arch] += current_loss.item()
 
-            to_device(current_model, 'cpu')
+            del current_model
+            if self.args_dict['device'] == 'cuda':
+                torch.cuda.empty_cache()
 
         surrogates_list = [arch
                            for arch in sorted(model_scores, key=model_scores.get)
@@ -247,6 +254,10 @@ class Attacker:
 
         for arch, current_model in zip(self.similarity_coeffs.keys(), self.surrogate_models):
             predictions = predict(to_device(current_model, self.args_dict['device']), x)
+
+            del current_model
+            if self.args_dict['device'] == 'cuda':
+                torch.cuda.empty_cache()
 
             current_loss = self.criterion(predictions, labels)
             loss = torch.add(loss, self.optimization_direction * self.similarity_coeffs[arch] * current_loss)
