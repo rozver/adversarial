@@ -196,8 +196,13 @@ class Attacker:
 
         step.eps = self.args_dict['sigma']
 
-        x = image_batch.clone().detach().requires_grad_(False).unsqueeze(0)
-        x = torch.cat([x] * self.args_dict['num_transformations'])
+        x = image_batch.clone().detach().requires_grad_(False)
+        if self.args_dict['targeted']:
+            original_labels = torch.argmax(predict(self.model, x), dim=1)
+        else:
+            original_labels = targets
+
+        x = torch.cat([x.unsqueeze(0)] * self.args_dict['num_transformations'])
         x = step.random_perturb(x, mask_batch)
 
         predictions = []
@@ -205,14 +210,10 @@ class Attacker:
         for current_x in x:
             predictions.append(predict(self.model, current_x))
             current_labels = torch.argmax(predictions[-1], dim=1)
-
-            if not self.args_dict['targeted']:
-                labels.append(current_labels)
-            else:
-                labels.append(targets)
+            labels.append(current_labels)
 
             self.args_dict['label_shifts'] += (len(labels) - torch.sum(torch.eq(labels[-1],
-                                                                                current_labels[-1])).item())
+                                                                                original_labels)).item())
 
         for arch in self.available_surrogates_list:
             current_model = get_model(arch, 'standard', freeze=True, device=self.args_dict['device']).eval()
