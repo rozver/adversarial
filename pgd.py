@@ -214,8 +214,7 @@ class Attacker:
             current_labels = torch.argmax(predictions[-1], dim=1)
             labels.append(current_labels)
 
-            self.args_dict['label_shifts'] += (len(labels) - torch.sum(torch.eq(labels[-1],
-                                                                                original_labels)).item())
+            self.args_dict['label_shifts'] += torch.sum(~torch.eq(current_labels, original_labels)).item()
 
         for arch in self.available_surrogates_list:
             current_model = get_model(arch, 'standard', freeze=True, device=self.args_dict['device']).eval()
