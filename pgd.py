@@ -33,6 +33,7 @@ PARSER_ARGS = [
     {'name': '--similarity_coeffs', 'default': False, 'action': 'store_true'},
     {'name': '--num_surrogates', 'type': int, 'choices': None, 'default': 5, 'action': None},
     {'name': '--device', 'type': str, 'choices': ['cpu', 'cuda'], 'default': 'cpu', 'action': None},
+    {'name': '--seed', 'type': int, 'choices': None, 'default': None, 'action': None},
     {'name': '--save_file_location', 'type': int, 'choices': None, 'default': None, 'action': None},
 ]
 
@@ -59,6 +60,7 @@ PGD_DEFAULT_ARGS_DICT = {
     'num_surrogates': 5,
     'restart_iterations': 10,
     'device': 'cpu',
+    'seed': None,
     'save_file_location': 'results/pgd_new_experiments/test.py',
 }
 
@@ -267,6 +269,9 @@ def main():
 
     print('Running PGD experiment with the following arguments:')
     print(str(args_dict) + '\n')
+
+    if args_dict['seed'] is not None:
+        torch.manual_seed(args_dict['seed'])
 
     if args_dict['checkpoint_location'] is None:
         model = get_model(arch=args_dict['arch'], parameters='standard', freeze=True, device=args_dict['device']).eval()
