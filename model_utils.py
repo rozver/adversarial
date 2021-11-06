@@ -42,9 +42,7 @@ def download_models():
     for arch in ARCHS_LIST:
         if not os.path.exists('models/transfer_archs/' + arch + '.pt'):
             try:
-                print('Downloading model  ' + arch + '...')
                 model = get_model(arch, True)
-                print('Finished!\n')
             except EOFError:
                 continue
 
