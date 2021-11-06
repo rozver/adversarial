@@ -14,7 +14,8 @@ UNSUPPORTED_ARCHS = [
     'ecaresnet101d_pruned',
     'ecaresnet101d',
     'efficientnet_b1_pruned',
-    'efficientnet_b2_pruned'
+    'efficientnet_b2_pruned',
+    'vit_small_patch32_384'
 ]
 
 ARCHS_LIST = list(set(TIMM_ARCHS)-set(UNSUPPORTED_ARCHS))
