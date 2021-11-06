@@ -3,12 +3,14 @@ import timm
 from robustness.datasets import ImageNet
 from robustness.model_utils import make_and_restore_model
 import os
+import urllib
 
 
 TIMM_ARCHS = timm.list_models(pretrained=True)
 
 UNSUPPORTED_ARCHS = [
-    'ecaresnet50d'
+    'ecaresnet50d',
+    'efficientnet_b3_pruned'
 ]
 
 ARCHS_LIST = list(set(TIMM_ARCHS)-set(UNSUPPORTED_ARCHS))
@@ -45,12 +47,15 @@ def to_device(x, device):
 
 
 def download_models():
+    unsupported_archs = []
     for arch in ARCHS_LIST:
         if not os.path.exists('models/transfer_archs/' + arch + '.pt'):
             try:
                 model = get_model(arch, True)
-            except EOFError:
+            except urllib.error.URLError:
+                unsupported_archs.append(arch)
                 continue
+    print(unsupported_archs)
 
 
 def convert_to_robustness(model, state_dict):
