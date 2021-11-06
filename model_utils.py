@@ -5,7 +5,13 @@ from robustness.model_utils import make_and_restore_model
 import os
 
 
-ARCHS_LIST = timm.list_models(pretrained=True)
+TIMM_ARCHS = timm.list_models(pretrained=True)
+
+UNSUPPORTED_ARCHS = [
+    'ecaresnet50d'
+]
+
+ARCHS_LIST = list(set(TIMM_ARCHS)-set(UNSUPPORTED_ARCHS))
 
 
 def predict(model, x):
