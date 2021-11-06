@@ -1,79 +1,11 @@
 import torch
-import torchvision
+import timm
 from robustness.datasets import ImageNet
 from robustness.model_utils import make_and_restore_model
 import os
-import pretrainedmodels
 
-STANDARD_PARAMETERS = {
-    'torchvision': [True],
-    'pretrainedmodels': [1000, 'imagenet'],
-}
 
-LOADERS = {
-    'torchvision': torchvision.models,
-    'pretrainedmodels': pretrainedmodels.models,
-}
-
-TORCHVISION_ARCHS = [
-    'mobilenet_v2',
-    'shufflenet_v2_x0_5',
-    'squeezenet1_1',
-    'mnasnet1_0',
-    'googlenet',
-    'resnet18',
-    'resnet34',
-    'resnet50',
-    'resnet101',
-    'resnet152'
-]
-
-PRETRAINEDMODELS_ARCHS = [
-    'fbresnet152',
-    'bninception',
-    'resnext101_32x4d',
-    'resnext101_64x4d',
-    'alexnet',
-    'densenet121',
-    'densenet169',
-    'densenet201',
-    'densenet161',
-    'vgg11',
-    'vgg11_bn',
-    'vgg13',
-    'vgg13_bn',
-    'vgg16',
-    'vgg16_bn',
-    'vgg19_bn',
-    'vgg19',
-    'nasnetamobile',
-    'dpn68',
-    'dpn68b',
-    'dpn92',
-    'dpn98',
-    'dpn131',
-    'dpn107',
-    'xception',
-    'senet154',
-    'se_resnet50',
-    'se_resnet101',
-    'se_resnet152',
-    'se_resnext50_32x4d',
-    'se_resnext101_32x4d',
-    'cafferesnet101'
-]
-
-OTHER_MODELS = [
-    'inception_v4',
-    'inceptionresnetv2',
-    'inceptionv3',
-    'squeezenet1_0',
-    'nasnetalarge',
-    'pnasnet5large',
-    'polynet'
-]
-
-ARCHS_LIST = TORCHVISION_ARCHS + PRETRAINEDMODELS_ARCHS
+ARCHS_LIST = timm.list_models(pretrained=True)
 
 
 def predict(model, x):
@@ -106,22 +38,15 @@ def to_device(x, device):
     return x
 
 
-def get_archs_dict():
-    torchvision_models_dict = dict.fromkeys(TORCHVISION_ARCHS, 'torchvision')
-    pretrainedmodels_dict = dict.fromkeys(PRETRAINEDMODELS_ARCHS, 'pretrainedmodels')
-    archs_dict = {**torchvision_models_dict, **pretrainedmodels_dict}
-    return archs_dict
-
-
 def download_models():
     for arch in ARCHS_LIST:
         if not os.path.exists('models/transfer_archs/' + arch + '.pt'):
-            if arch in ARCHS_LIST:
-                try:
-                    model = get_model(arch, 'standard')
-                    print('Model ' + arch + ' successfully downloaded!')
-                except EOFError:
-                    continue
+            try:
+                print('Downloading model  ' + arch + '...')
+                model = get_model(arch, True)
+                print('Finished!\n')
+            except EOFError:
+                continue
 
 
 def convert_to_robustness(model, state_dict):
@@ -131,35 +56,17 @@ def convert_to_robustness(model, state_dict):
     return model, state_dict
 
 
-def get_model(arch, parameters=None, freeze=False, device='cpu'):
+def get_model(arch, pretrained=True, freeze=False, device='cpu'):
     if arch in ARCHS_LIST:
-        archs_dict = get_archs_dict()
-        loader = LOADERS[archs_dict[arch]]
+        model = timm.create_model(arch, pretrained=pretrained)
+        model.arch = arch
+        model.device = 'cpu'
 
-        if parameters is None:
-            parameters = []
-        elif parameters == 'standard':
-            parameters = STANDARD_PARAMETERS[archs_dict[arch]]
-        if type(parameters) == list:
-            if len(parameters) == 2 and parameters[1] in pretrainedmodels.pretrained_settings[arch]:
-                model = loader.__dict__[arch](*parameters)
-            else:
-                model = loader.__dict__[arch](*parameters[:1])
+        if freeze:
+            model = freeze_parameters(model)
 
-            model.arch = arch
-            model.device = 'cpu'
-
-            if archs_dict[arch] == 'pretrainedmodels' and len(parameters) == 0:
-                model.apply(weight_reset)
-
-            if freeze:
-                model = freeze_parameters(model)
-
-            model = to_device(model, device)
-            return model
-
-        else:
-            raise ValueError('Incorrect model parameters format - has to be a list!')
+        model = to_device(model, device)
+        return model
     else:
         raise ValueError('Specified model is not in the list of available ones!')
 
@@ -183,13 +90,13 @@ def load_model(location, arch=None, from_robustness=False):
             if arch is None:
                 raise ValueError('Please, specify model architecture name when loading with robustness')
             model, state_dict = convert_to_robustness(get_model('resnet50',
-                                                                parameters=None),
+                                                                pretrained=False),
                                                       get_state_dict(location))
             model.load_state_dict(state_dict)
             return model.model
 
         state_dict = get_state_dict(location=location)
-        model = get_model(arch=arch, parameters=None)
+        model = get_model(arch=arch, pretrained=False)
         model.load_state_dict(state_dict)
 
         return model
