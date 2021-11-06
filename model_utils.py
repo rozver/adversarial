@@ -16,7 +16,7 @@ UNSUPPORTED_ARCHS = [
     'efficientnet_b1_pruned',
     'efficientnet_b2_pruned',
     'efficientnet_b3_pruned',
-    'vit_small_patch32_384'
+    'vit_small_patch32_384',
     'cait_xxs36_384',
     'tresnet_m',
     'swin_large_patch4_window12_384_in22k',
