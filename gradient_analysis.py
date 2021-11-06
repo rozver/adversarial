@@ -140,7 +140,7 @@ def main():
                            arch=args_dict['arch'],
                            from_robustness=args_dict['from_robustness']).cuda().eval()
     else:
-        model = get_model(args_dict['arch'], 'standard' if [args_dict['pretrained']] else None).cuda().eval()
+        model = get_model(args_dict['arch'], True if [args_dict['pretrained']] else False).cuda().eval()
 
     criterion = torch.nn.CrossEntropyLoss(reduction='none')
 

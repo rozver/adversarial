@@ -119,7 +119,7 @@ class Attacker:
                 coeffs = [1 / len(surrogates_list)] * len(surrogates_list)
                 self.similarity_coeffs = (dict(zip(surrogates_list, coeffs)))
                 ALL_SIMILARITY_COEFFS.append(self.similarity_coeffs)
-                self.surrogate_models = [get_model(arch, parameters='standard', freeze=True).eval()
+                self.surrogate_models = [get_model(arch, pretrained=True, freeze=True).eval()
                                          for arch in surrogates_list]
             else:
                 self.args_dict['label_shifts'] = 0
@@ -240,7 +240,7 @@ class Attacker:
         self.similarity_coeffs = (dict(zip(surrogates_list, coeffs)))
         ALL_SIMILARITY_COEFFS.append(self.similarity_coeffs)
 
-        surrogate_models = [get_model(arch, parameters='standard', freeze=True).eval()
+        surrogate_models = [get_model(arch, pretrained=True, freeze=True).eval()
                             for arch in surrogates_list]
         return surrogate_models
 
@@ -273,7 +273,7 @@ def main():
         torch.manual_seed(args_dict['seed'])
 
     if args_dict['checkpoint_location'] is None:
-        model = get_model(arch=args_dict['arch'], parameters='standard', freeze=True, device=args_dict['device']).eval()
+        model = get_model(arch=args_dict['arch'], pretrained=True, freeze=True, device=args_dict['device']).eval()
     else:
         model = to_device(load_model(location=args_dict['checkpoint_location'],
                                      arch=args_dict['arch'],
