@@ -47,7 +47,7 @@ UNSUPPORTED_ARCHS = [
     'cait_m48_448',
     'tresnet_l',
     'cait_s36_384',
-    'vit_small_patch32_384',
+    'vit_small_patch32_384'
 ]
 
 ARCHS_LIST = list(set(TIMM_ARCHS) - set(UNSUPPORTED_ARCHS))
