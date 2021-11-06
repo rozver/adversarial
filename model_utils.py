@@ -49,12 +49,11 @@ def to_device(x, device):
 def download_models():
     unsupported_archs = []
     for arch in ARCHS_LIST:
-        if not os.path.exists('models/transfer_archs/' + arch + '.pt'):
-            try:
-                model = get_model(arch, True)
-            except urllib.error.URLError:
-                unsupported_archs.append(arch)
-                continue
+        try:
+            model = get_model(arch, True)
+        except urllib.error.URLError:
+            unsupported_archs.append(arch)
+            continue
     print(unsupported_archs)
 
 
