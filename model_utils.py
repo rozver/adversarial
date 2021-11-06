@@ -9,8 +9,12 @@ import urllib
 TIMM_ARCHS = timm.list_models(pretrained=True)
 
 UNSUPPORTED_ARCHS = [
-    'ecaresnet50d',
-    'efficientnet_b3_pruned'
+    'ecaresnet50d_pruned',
+    'ecaresnetlight',
+    'ecaresnet101d_pruned',
+    'ecaresnet101d',
+    'efficientnet_b1_pruned',
+    'efficientnet_b2_pruned'
 ]
 
 ARCHS_LIST = list(set(TIMM_ARCHS)-set(UNSUPPORTED_ARCHS))
