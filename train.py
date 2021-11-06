@@ -17,7 +17,7 @@ class Trainer:
             training_args_dict['arch'] = self.model.arch
         else:
             self.model = get_model(arch=training_args_dict['arch'],
-                                   parameters=('standard' if training_args_dict['pretrained'] else None))
+                                   pretrained=(True if training_args_dict['pretrained'] else None))
 
         self.normalize = Normalizer(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         self.training_args_dict = training_args_dict
@@ -119,7 +119,7 @@ def main():
         images = torch.load(dataset_properties['images'])
 
         if dataset_properties['labels'] is None:
-            eval_model = get_model(arch=args_dict['arch'], parameters='standard')
+            eval_model = get_model(arch=args_dict['arch'], pretrained=True)
             normalize = Normalizer(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
             labels = [torch.argmax(eval_model(normalize(x.unsqueeze(0)))) for x in images]
         else:

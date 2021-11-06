@@ -1,22 +1,23 @@
 import torch
 from torch.nn.functional import softmax
 from model_utils import ARCHS_LIST, predict, get_model
+from dataset_utils import load_imagenet
 from pgd import get_current_time, Attacker, PGD_DEFAULT_ARGS_DICT
 from gradient_analysis import get_gradient
 from transformations import Blur
 from file_utils import validate_save_file_location
 import random
 import argparse
-import sys
 
 
-def get_simba_gradient(model, x, y, criterion, similarity_coeffs):
-    grad = get_gradient(model, x, y, criterion, similarity_coeffs)
-    return grad
+def get_simba_gradient(model, x, y, criterion, similarity_coeffs, mask):
+    grad = get_gradient(model, x, y, criterion, similarity_coeffs, mask)
+    return grad.cuda()
 
 
 def normalize_gradient_vector(grad_vector):
-    grad_normalized = softmax(torch.abs(grad_vector), dim=0)
+    grad_abs = torch.abs(grad_vector)
+    grad_normalized = grad_abs/torch.sum(grad_abs)
     return grad_normalized.tolist()
 
 
@@ -35,11 +36,12 @@ def get_tensor_coordinate_indices(coordinate, size):
     return c, w, h
 
 
-def simba(model, x, y, args_dict, substitute_model, criterion, pgd_attacker):
+def simba(model, x, y, mask, args_dict, substitute_model, criterion, pgd_attacker):
     delta = torch.zeros_like(x).cuda()
     q = torch.zeros_like(x).cuda()
     available_coordinates = None
     similarity_coeffs = None
+    distribution = None
     conv = Blur()
     conv.parameters = [(9, 3)]
 
@@ -53,25 +55,35 @@ def simba(model, x, y, args_dict, substitute_model, criterion, pgd_attacker):
     p = get_probabilities(model, x, y)
 
     if not args_dict['gradient_priors']:
-        perm = torch.randperm(x.size().numel()).tolist()
+        perm = torch.randperm(x.size().numel()).cuda()
+        perm = (perm + 1) * torch.flatten(mask)
+        perm = perm[perm != 0] - 1
+
+        if perm.size(0) < args_dict['num_iterations']:
+            print('The specified number of iterations is more than the available coordinates!')
+            args_dict['num_iterations'] = perm.size(0)
+
     else:
         perm = range(0, x.size().numel())
-        available_coordinates = torch.ones(x.size().numel())
+        available_coordinates = torch.flatten(mask.clone())
 
     for iteration in range(args_dict['num_iterations']):
         if args_dict['gradient_priors']:
-            grad = get_simba_gradient(substitute_model, x + delta, y, criterion, similarity_coeffs)
-            distribution = torch.flatten(grad)
-            distribution_normalized = normalize_gradient_vector(distribution*available_coordinates)
+            if iteration % args_dict['grad_iterations'] == 0:
+                grad = get_simba_gradient(substitute_model, x + delta, y, criterion, similarity_coeffs, mask)
+                distribution = torch.flatten(grad)
+
+                if args_dict['transfer']:
+                    delta = delta + args_dict['step_size'] * torch.sign(grad.cuda()) * available_coordinates.view(
+                        delta.size())
+                    delta = torch.clamp(delta, -args_dict['eps'], args_dict['eps'])
+
+            distribution_normalized = normalize_gradient_vector(distribution * available_coordinates)
             coordinate = random.choices(perm, distribution_normalized)[0]
             available_coordinates[coordinate] = 0
 
-            if args_dict['transfer']:
-                delta = delta + args_dict['step_size']*torch.sign(grad.cuda())
-                delta = torch.clamp(delta, -args_dict['eps'], args_dict['eps'])
-
         else:
-            coordinate = perm[iteration]
+            coordinate = int(perm[iteration].item())
 
         c, w, h = get_tensor_coordinate_indices(coordinate, x.size())
 
@@ -129,14 +141,17 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', type=str, choices=ARCHS_LIST, default='resnet50')
-    parser.add_argument('--dataset', type=str, default='dataset/imagenet-airplanes-images.pt')
+    parser.add_argument('--dataset', type=str, default='dataset/imagenet')
+    parser.add_argument('--masks', default=False, action='store_true')
+    parser.add_argument('--num_samples', type=int, default=50)
     parser.add_argument('--gradient_priors', default=False, action='store_true')
+    parser.add_argument('--grad_iterations', type=int, default=32)
     parser.add_argument('--attack_type', type=str, choices=['nes', 'simba'], default='simba')
     parser.add_argument('--conv', default=False, action='store_true')
     parser.add_argument('--substitute_model', type=str, choices=ARCHS_LIST, default='resnet152')
     parser.add_argument('--ensemble_selection', default=False, action='store_true')
     parser.add_argument('--transfer', default=False, action='store_true')
-    parser.add_argument('--eps', type=float, default=10)
+    parser.add_argument('--eps', type=float, default=1)
     parser.add_argument('--step_size', type=float, default=1/255.0)
     parser.add_argument('--num_iterations', type=int, default=1)
     parser.add_argument('--save_file_location', type=str, default='results/blackbox/' + time + '.pt')
@@ -144,9 +159,13 @@ def main():
 
     validate_save_file_location(args_dict['save_file_location'])
 
-    model = get_model(args_dict['model'], parameters='standard').cuda().eval()
+    model = get_model(args_dict['model'], pretrained=True, freeze=True).cuda().eval()
 
-    dataset = torch.load(args_dict['dataset'])
+    if not args_dict['masks']:
+        dataset = load_imagenet(args_dict['dataset'])
+        loader, _ = dataset.make_loaders(workers=10, batch_size=1)
+    else:
+        loader = torch.load(args_dict['dataset'])
 
     adversarial_examples_list = []
     predictions_list = []
@@ -163,16 +182,30 @@ def main():
                 pgd_attacker.available_surrogates_list = ARCHS_LIST
                 pgd_attacker.available_surrogates_list.remove(args_dict['model'])
             else:
-                substitute_model = get_model(args_dict['substitute_model'], parameters='standard').cuda().eval()
+                substitute_model = get_model(args_dict['substitute_model'],
+                                             pretrained=True, freeze=True).cuda().eval()
 
-    for index, image in enumerate(dataset):
-        with torch.no_grad():
-            original_prediction = predict(model, image.cuda().unsqueeze(0))
-        label = torch.argmax(original_prediction, dim=1)
+    for index, entry in enumerate(loader):
+        if args_dict['masks']:
+            image, mask = entry
+            image.unsqueeze_(0)
+            original_prediction = predict(model, image.cuda())
+            label = torch.argmax(original_prediction, dim=1)
+        else:
+            image, label = entry
+            mask = torch.ones_like(image)
+
+            with torch.no_grad():
+                original_prediction = predict(model, image.cuda())
+                predicted_label = torch.argmax(original_prediction, dim=1)
+                if label.item() != predicted_label.item():
+                    continue
 
         criterion = torch.nn.CrossEntropyLoss(reduction='none')
 
-        delta = attack(model, image.cuda(), label.cuda(), args_dict, substitute_model, criterion, pgd_attacker)
+        image.squeeze_(0)
+        delta = attack(model, image.cuda(), label.cuda(), mask.cuda(),
+                       args_dict, substitute_model, criterion, pgd_attacker)
         adversarial_example = (image.cuda() + delta).clamp(0, 1)
 
         with torch.no_grad():
@@ -181,6 +214,9 @@ def main():
         adversarial_examples_list.append(adversarial_example.cpu())
         predictions_list.append({'original': original_prediction.cpu(),
                                  'adversarial': adversarial_prediction.cpu()})
+
+        if index == args_dict['num_samples'] - 1:
+            break
 
     torch.save({'adversarial_examples': adversarial_examples_list,
                 'predictions': predictions_list,

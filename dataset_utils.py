@@ -6,13 +6,13 @@ import matplotlib
 from matplotlib import pyplot as plt
 from torchvision.transforms import transforms
 from torchvision.utils import save_image
+import robustness
 import datasets
 from model_utils import get_model
 import os
 from abc import ABC
 import shutil
 import json
-import ast
 
 
 def normalize_names(location):
@@ -67,17 +67,28 @@ def inspect_dataset(dataset):
         dataset = torch.load(dataset)
 
     for entry in dataset:
-        if len(entry) == 2:
-            image, mask = entry
-            fig = plt.figure()
-            fig.add_subplot(1, 2, 1)
-            plt.imshow(image.permute(1, 2, 0))
-            fig.add_subplot(1, 2, 2)
-            plt.imshow(mask.permute(1, 2, 0))
-            plt.show()
+        if type(entry == tuple):
+            if len(entry[1].size()) == 1:
+                images, _ = entry
+                plot(images)
+            else:
+                image, mask = entry
+                fig = plt.figure()
+                fig.add_subplot(1, 2, 1)
+                plt.imshow(image.permute(1, 2, 0))
+                fig.add_subplot(1, 2, 2)
+                plt.imshow(mask.permute(1, 2, 0))
+                plt.show()
         else:
-            plt.imshow(entry.permute(1, 2, 0))
-            plt.show()
+            plot(entry)
+
+
+def load_imagenet(location):
+    label_mapping = None
+    if os.path.exists(os.path.join(location, 'custom_mapping.txt')):
+        label_mapping = imagenet_mapping
+    dataset = robustness.datasets.ImageNet(location, label_mapping=label_mapping)
+    return dataset
 
 
 class Normalizer(torch.nn.Module, ABC):

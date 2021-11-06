@@ -13,8 +13,7 @@ def get_transformation_bounds_dict():
     bounds_dict = {
         'light': [-0.1, 0.1],
         'noise': [0.0, 0.05],
-        'blur': [0, 8],
-        'blur_kernel_length': [0, 8],
+        'blur': [0, 1],
         'translation': [-10.0, 10.0],
         'rotation': [-10, 10],
     }
@@ -56,11 +55,13 @@ class Transformation:
         self.algorithm = 1
 
     def __call__(self, x):
+        parameters_are_none = False
         if len(x.size()) != 4:
             x = x.unsqueeze(0)
 
         if self.parameters is None:
-            self.parameters = [self.get_random_parameters() for i in range(x.size(0))]
+            parameters_are_none = True
+            self.parameters = [self.get_random_parameters() for _ in range(x.size(0))]
 
         x_chunks = torch.chunk(x, x.size(0), dim=0)
         x_chunks_transformed = []
@@ -69,7 +70,9 @@ class Transformation:
             x_chunks_transformed.append(self.transform(x_chunks[index], index))
         x = torch.cat(x_chunks_transformed, 0)
 
-        self.parameters = None
+        if parameters_are_none:
+            self.parameters = None
+
         return x
 
     def get_random_parameters(self):
@@ -108,7 +111,7 @@ def gaussian_kernel(kernel_length, sigma=1.):
     x = torch.linspace(-sigma, sigma, kernel_length).cuda()
     kernel_1d = torch.exp(-x ** 2 / 2.0) / torch.sqrt(torch.Tensor([2 * math.pi]).cuda())
     kernel_raw = torch.ger(kernel_1d, kernel_1d)
-    kernel = kernel_raw / kernel_raw.sum()
+    kernel = torch.div(kernel_raw, kernel_raw.sum())
     return kernel
 
 
@@ -126,7 +129,7 @@ class Blur(Transformation):
         max_kernel_length = min(x.size(2), x.size(3))//8
 
         if kernel_length == 0 or kernel_length >= max_kernel_length:
-            kernel_length = random.randint(1,  max_kernel_length)
+            kernel_length = random.randint(5,  max_kernel_length)
 
         kernel = gaussian_kernel(kernel_length, sigma)
         kernel = kernel.view(1, 1, kernel_length, kernel_length)

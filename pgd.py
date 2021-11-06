@@ -1,15 +1,12 @@
 import torch
-import robustness
 from pgd_attack_steps import LinfStep, L2Step
-from model_utils import ARCHS_LIST, get_model, load_model, predict
-from dataset_utils import imagenet_mapping
+from model_utils import ARCHS_LIST, get_model, load_model, to_device, predict
+from dataset_utils import load_imagenet
 from transformations import get_random_transformation
 from file_utils import get_current_time, validate_save_file_location
-from collections import defaultdict
 import argparse
 import random
 import copy
-import os
 
 TARGET_CLASS = 934
 ALL_SIMILARITY_COEFFS = []
@@ -35,6 +32,8 @@ PARSER_ARGS = [
     {'name': '--selective', 'default': False, 'action': 'store_true'},
     {'name': '--similarity_coeffs', 'default': False, 'action': 'store_true'},
     {'name': '--num_surrogates', 'type': int, 'choices': None, 'default': 5, 'action': None},
+    {'name': '--device', 'type': str, 'choices': ['cpu', 'cuda'], 'default': 'cpu', 'action': None},
+    {'name': '--seed', 'type': int, 'choices': None, 'default': None, 'action': None},
     {'name': '--save_file_location', 'type': int, 'choices': None, 'default': None, 'action': None},
 ]
 
@@ -59,9 +58,11 @@ PGD_DEFAULT_ARGS_DICT = {
     'selective': False,
     'similarity_coeffs': False,
     'num_surrogates': 5,
+    'restart_iterations': 10,
+    'device': 'cpu',
+    'seed': None,
     'save_file_location': 'results/pgd_new_experiments/test.py',
-    'restart_iterations': 10
-     }
+}
 
 
 def get_args_dict():
@@ -118,7 +119,7 @@ class Attacker:
                 coeffs = [1 / len(surrogates_list)] * len(surrogates_list)
                 self.similarity_coeffs = (dict(zip(surrogates_list, coeffs)))
                 ALL_SIMILARITY_COEFFS.append(self.similarity_coeffs)
-                self.surrogate_models = [get_model(arch, parameters='standard', freeze=True).eval()
+                self.surrogate_models = [get_model(arch, pretrained=True, freeze=True).eval()
                                          for arch in surrogates_list]
             else:
                 self.args_dict['label_shifts'] = 0
@@ -161,11 +162,13 @@ class Attacker:
 
             if self.args_dict['eot']:
                 t = get_random_transformation()
-                loss = self.loss(t(x.cuda()), targets)
+                loss = self.loss(t(x), targets)
             else:
-                loss = self.loss(x.cuda(), targets)
+                loss = self.loss(x, targets)
 
-            x.register_hook(lambda grad: grad * mask_batch.float())
+            if mask_batch != 1:
+                x.register_hook(lambda grad: grad * mask_batch.float())
+
             loss.backward()
 
             grads = x.grad.detach().clone()
@@ -186,32 +189,43 @@ class Attacker:
             x = step.step(x, grads)
             x = step.project(x)
 
-        return best_x.cuda()
+        return best_x
 
-    def selective_transfer(self, image_batch, mask_batch, original_labels, step):
-        model_scores = {}
-        model_scores = defaultdict(lambda: 0, model_scores)
+    def selective_transfer(self, image_batch, mask_batch, targets, step):
+        model_scores = dict(zip(self.available_surrogates_list, [0] * len(self.available_surrogates_list)))
         mse_criterion = torch.nn.MSELoss(reduction='mean')
         batch_indices = torch.arange(image_batch.size(0))
 
         step.eps = self.args_dict['sigma']
 
-        for iteration in range(self.args_dict['num_transformations']):
-            x = image_batch.clone().detach().requires_grad_(False)
-            x = step.random_perturb(x, mask_batch)
+        x = image_batch.clone().detach().requires_grad_(False)
+        if self.args_dict['targeted']:
+            original_labels = torch.argmax(predict(self.model, x), dim=1)
+        else:
+            original_labels = targets
 
-            predictions = predict(self.model.cuda(), x.cuda())
-            labels = torch.argmax(predictions, dim=1)
+        x = torch.cat([x.unsqueeze(0)] * self.args_dict['num_transformations'])
+        x = step.random_perturb(x, mask_batch)
 
-            self.args_dict['label_shifts'] += (len(labels) - torch.sum(torch.eq(labels, original_labels)).item())
+        predictions = []
+        labels = []
+        for current_x in x:
+            predictions.append(predict(self.model, current_x))
+            current_labels = torch.argmax(predictions[-1], dim=1)
+            labels.append(current_labels)
 
-            for arch in self.available_surrogates_list:
-                current_model = get_model(arch, 'standard', freeze=True).cuda().eval()
-                current_predictions = predict(current_model, x)
+            self.args_dict['label_shifts'] += torch.sum(~torch.eq(current_labels, original_labels)).item()
 
-                current_loss = mse_criterion(current_predictions[batch_indices, labels],
-                                             predictions[batch_indices, labels])
-                model_scores[arch] += current_loss
+        for arch in self.available_surrogates_list:
+            current_model = get_model(arch, 'standard', freeze=True, device=self.args_dict['device']).eval()
+
+            for index, current_x in enumerate(x):
+                current_predictions = predict(current_model, current_x)
+                current_loss = mse_criterion(current_predictions[batch_indices, labels[index]],
+                                             predictions[index][batch_indices, labels[index]])
+                model_scores[arch] += current_loss.item()
+
+            to_device(current_model, 'cpu')
 
         surrogates_list = [arch
                            for arch in sorted(model_scores, key=model_scores.get)
@@ -219,14 +233,14 @@ class Attacker:
 
         if self.args_dict['similarity_coeffs']:
             scores_reversed = torch.FloatTensor([model_scores[arch] for arch in surrogates_list][::-1])
-            coeffs = torch.nn.functional.softmax(scores_reversed, dim=0).tolist()
+            coeffs = (scores_reversed / torch.sum(scores_reversed)).tolist()
         else:
             coeffs = [1 / len(surrogates_list)] * len(surrogates_list)
 
         self.similarity_coeffs = (dict(zip(surrogates_list, coeffs)))
         ALL_SIMILARITY_COEFFS.append(self.similarity_coeffs)
 
-        surrogate_models = [get_model(arch, parameters='standard', freeze=True).eval()
+        surrogate_models = [get_model(arch, pretrained=True, freeze=True).eval()
                             for arch in surrogates_list]
         return surrogate_models
 
@@ -236,11 +250,12 @@ class Attacker:
         return loss
 
     def transfer_loss(self, x, labels):
-        loss = torch.zeros([1]).cuda()
+        loss = torch.zeros([1], device=self.args_dict['device'])
 
         for arch, current_model in zip(self.similarity_coeffs.keys(), self.surrogate_models):
-            current_model.cuda()
-            predictions = predict(current_model, x)
+            predictions = predict(to_device(current_model, self.args_dict['device']), x)
+
+            to_device(current_model, 'cpu')
 
             current_loss = self.criterion(predictions, labels)
             loss = torch.add(loss, self.optimization_direction * self.similarity_coeffs[arch] * current_loss)
@@ -254,12 +269,16 @@ def main():
     print('Running PGD experiment with the following arguments:')
     print(str(args_dict) + '\n')
 
+    if args_dict['seed'] is not None:
+        torch.manual_seed(args_dict['seed'])
+
     if args_dict['checkpoint_location'] is None:
-        model = get_model(arch=args_dict['arch'], parameters='standard', freeze=True).cuda().eval()
+        model = get_model(arch=args_dict['arch'], pretrained=True, freeze=True, device=args_dict['device']).eval()
     else:
-        model = load_model(location=args_dict['checkpoint_location'],
-                           arch=args_dict['arch'],
-                           from_robustness=args_dict['from_robustness']).cuda().eval()
+        model = to_device(load_model(location=args_dict['checkpoint_location'],
+                                     arch=args_dict['arch'],
+                                     from_robustness=args_dict['from_robustness']).eval(),
+                          'cuda')
 
     attacker = Attacker(model, args_dict)
 
@@ -267,13 +286,12 @@ def main():
     if args_dict['masks']:
         loader = torch.load(args_dict['dataset'])
     else:
-        label_mapping = None
-        if not os.path.exists(os.path.join(args_dict['dataset'], 'val')):
-            label_mapping = imagenet_mapping
-        dataset = robustness.datasets.ImageNet(args_dict['dataset'], label_mapping=label_mapping)
+        dataset = load_imagenet(args_dict['dataset'])
         loader, _ = dataset.make_loaders(workers=10, batch_size=args_dict['batch_size'])
-
     print('Finished!\n')
+
+    mask_batch = 1
+    total_num_samples = 0
     adversarial_examples_list = []
     predictions_list = []
 
@@ -284,16 +302,16 @@ def main():
             image_batch.unsqueeze_(0)
             mask_batch.unsqueeze_(0)
 
-            label_batch = torch.argmax(predict(model, image_batch.cuda()), dim=1)
+            label_batch = torch.argmax(predict(model, to_device(image_batch, args_dict['device'])), dim=1)
             if mask_batch.size != image_batch.size():
-                mask_batch = torch.ones_like(image_batch)
+                mask_batch = 1
+            else:
+                mask_batch = to_device(mask_batch, device=args_dict['device'])
         else:
             image_batch, label_batch = batch
-            mask_batch = torch.ones_like(image_batch)
 
-        image_batch = image_batch.cuda()
-        mask_batch = mask_batch.cuda()
-        label_batch = label_batch.cuda()
+        image_batch = to_device(image_batch, device=args_dict['device'])
+        label_batch = to_device(label_batch, device=args_dict['device'])
 
         if not args_dict['targeted'] and not args_dict['masks']:
             predicted_label_batch = torch.argmax(predict(model, image_batch), dim=1)
@@ -302,9 +320,12 @@ def main():
             if num_matching_labels == 0:
                 continue
 
-            image_batch, mask_batch, label_batch = (image_batch[matching_labels],
-                                                    mask_batch[matching_labels],
-                                                    label_batch[matching_labels])
+            image_batch, label_batch = (image_batch[matching_labels],
+                                        label_batch[matching_labels])
+
+            if mask_batch != 1:
+                mask_batch = mask_batch[matching_labels]
+
             targets = label_batch
         else:
             targets = TARGET_CLASS * torch.ones_like(label_batch)
@@ -312,13 +333,15 @@ def main():
         adversarial_examples = attacker(image_batch, mask_batch, targets, False)
         adversarial_predictions = predict(model, adversarial_examples)
 
-        adversarial_examples_list.append(adversarial_examples.cpu())
-        predictions_list.append({'original': label_batch.cpu(),
-                                 'adversarial': adversarial_predictions.cpu()})
+        adversarial_examples_list.append(to_device(adversarial_examples, device='cpu'))
+        predictions_list.append({'original': to_device(targets, device='cpu'),
+                                 'adversarial': to_device(adversarial_predictions, device='cpu')})
 
-        if (index + 2) * image_batch.size(0) > args_dict['num_samples']:
+        total_num_samples += image_batch.size(0)
+        if total_num_samples >= args_dict['num_samples']:
             break
 
+    args_dict['num_samples'] = total_num_samples
     print('Finished!')
 
     print('Serializing results...')
