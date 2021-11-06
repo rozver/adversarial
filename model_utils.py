@@ -5,20 +5,21 @@ from robustness.model_utils import make_and_restore_model
 import os
 import urllib
 
-
 TIMM_ARCHS = timm.list_models(pretrained=True)
 
 UNSUPPORTED_ARCHS = [
+    'ecaresnet50d',
     'ecaresnet50d_pruned',
     'ecaresnetlight',
     'ecaresnet101d_pruned',
     'ecaresnet101d',
     'efficientnet_b1_pruned',
     'efficientnet_b2_pruned',
+    'efficientnet_b3_pruned',
     'vit_small_patch32_384'
 ]
 
-ARCHS_LIST = list(set(TIMM_ARCHS)-set(UNSUPPORTED_ARCHS))
+ARCHS_LIST = list(set(TIMM_ARCHS) - set(UNSUPPORTED_ARCHS))
 
 
 def predict(model, x):
