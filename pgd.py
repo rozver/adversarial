@@ -255,27 +255,27 @@ class Attacker:
         return loss
 
     def transfer_loss(self, x, labels):
-        predictions = None
-        loss = None
-
         if self.args_dict['logits_ensemble']:
             predictions = torch.zeros((x.size(0), 1000), device=self.args_dict['device'])
+
+            for arch, current_model in zip(self.similarity_coeffs.keys(), self.surrogate_models):
+                current_predictions = predict(to_device(current_model, self.args_dict['device']), x)
+
+                to_device(current_model, 'cpu')
+
+                predictions = torch.add(predictions, self.similarity_coeffs[arch] * current_predictions)
+
+            loss = self.optimization_direction * self.criterion(predictions, labels)
+
         else:
             loss = torch.zeros([1], device=self.args_dict['device'])
 
-        for arch, current_model in zip(self.similarity_coeffs.keys(), self.surrogate_models):
-            current_predictions = predict(to_device(current_model, self.args_dict['device']), x)
+            for arch, current_model in zip(self.similarity_coeffs.keys(), self.surrogate_models):
+                current_predictions = predict(to_device(current_model, self.args_dict['device']), x)
+                to_device(current_model, 'cpu')
 
-            to_device(current_model, 'cpu')
-
-            if self.args_dict['logits_ensemble']:
-                predictions = torch.add(predictions, self.similarity_coeffs[arch]*current_predictions)
-            else:
                 current_loss = self.criterion(current_predictions, labels)
                 loss = torch.add(loss, self.optimization_direction * self.similarity_coeffs[arch] * current_loss)
-
-        if self.args_dict['logits_ensemble']:
-            loss = self.optimization_direction * self.criterion(predictions, labels)
 
         return loss
 
