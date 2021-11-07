@@ -50,7 +50,7 @@ UNSUPPORTED_ARCHS = [
     'vit_small_patch32_384'
 ]
 
-ARCHS_LIST = list(set(TIMM_ARCHS) - set(UNSUPPORTED_ARCHS))
+ARCHS_LIST = sort(list(set(TIMM_ARCHS) - set(UNSUPPORTED_ARCHS)))
 
 
 def predict(model, x):
