@@ -91,6 +91,10 @@ def download_models():
         except urllib.error.URLError:
             unsupported_archs.append(arch)
             continue
+        except EOFError:
+            print('Error while downloading model ' + arch + '!')
+            continue
+
     print(unsupported_archs)
 
 
