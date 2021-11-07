@@ -33,6 +33,7 @@ PARSER_ARGS = [
     {'name': '--logits_ensemble', 'default': False, 'action': 'store_true'},
     {'name': '--similarity_coeffs', 'default': False, 'action': 'store_true'},
     {'name': '--num_surrogates', 'type': int, 'choices': None, 'default': 5, 'action': None},
+    {'name': '--top_predictions', 'type': int, 'choices': None, 'default': 1, 'action': None},
     {'name': '--device', 'type': str, 'choices': ['cpu', 'cuda'], 'default': 'cpu', 'action': None},
     {'name': '--seed', 'type': int, 'choices': None, 'default': None, 'action': None},
     {'name': '--save_file_location', 'type': int, 'choices': None, 'default': None, 'action': None}
@@ -187,11 +188,19 @@ class Attacker:
         x = step.random_perturb(x, mask_batch)
 
         predictions = []
-        labels = []
+        top_k_labels = []
+
         for current_x in x:
             predictions.append(predict(self.model, current_x))
             current_labels = torch.argmax(predictions[-1], dim=1)
-            labels.append(current_labels)
+
+            current_top_k_labels = torch.topk(predictions[-1], k=self.args_dict['top_predictions']).indices
+            current_top_k_labels = current_top_k_labels.transpose(0, 1)
+
+            if self.args_dict['top_predictions'] == 1:
+                current_top_k_labels = torch.flatten(current_top_k_labels)
+
+            top_k_labels.append(current_top_k_labels)
 
             self.args_dict['label_shifts'] += torch.sum(~torch.eq(current_labels, original_labels)).item()
 
@@ -200,8 +209,9 @@ class Attacker:
 
             for index, current_x in enumerate(x):
                 current_predictions = predict(current_model, current_x)
-                current_loss = mse_criterion(current_predictions[batch_indices, labels[index]],
-                                             predictions[index][batch_indices, labels[index]])
+                current_loss = mse_criterion(current_predictions[batch_indices, top_k_labels[index]],
+                                             predictions[index][batch_indices, top_k_labels[index]])
+
                 model_scores[arch] += current_loss.item()
 
             to_device(current_model, 'cpu')
