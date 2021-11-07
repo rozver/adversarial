@@ -12,7 +12,7 @@ TARGET_CLASS = 934
 ALL_SIMILARITY_COEFFS = []
 
 PARSER_ARGS = [
-    {'name': '--arch', 'type': str, 'choices': ARCHS_LIST, 'default': 'resnet50', 'action': None},
+    {'name': '--arch', 'type': str, 'choices': ARCHS_LIST + ['random'], 'default': 'resnet50', 'action': None},
     {'name': '--checkpoint_location', 'type': str, 'choices': None, 'default': None, 'action': None},
     {'name': '--from_robustness', 'default': False, 'action': 'store_true'},
     {'name': '--dataset', 'type': str, 'choices': None, 'default': 'dataset/imagenet', 'action': None},
@@ -89,6 +89,9 @@ def normalize_args_dict(args_dict):
     if args_dict['save_file_location'] is None:
         args_dict['save_file_location'] = 'results/pgd_new_experiments/' + time + '.pt'
     validate_save_file_location(args_dict['save_file_location'])
+
+    if args_dict['arch'] == 'random':
+        args_dict['arch'] = random.choice(ARCHS_LIST)
 
     if args_dict['norm'] == 'linf':
         args_dict['eps'] = args_dict['eps'] / 255.0
