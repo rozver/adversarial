@@ -35,36 +35,10 @@ PARSER_ARGS = [
     {'name': '--num_surrogates', 'type': int, 'choices': None, 'default': 5, 'action': None},
     {'name': '--device', 'type': str, 'choices': ['cpu', 'cuda'], 'default': 'cpu', 'action': None},
     {'name': '--seed', 'type': int, 'choices': None, 'default': None, 'action': None},
-    {'name': '--save_file_location', 'type': int, 'choices': None, 'default': None, 'action': None},
+    {'name': '--save_file_location', 'type': int, 'choices': None, 'default': None, 'action': None}
 ]
 
-PGD_DEFAULT_ARGS_DICT = {
-    'arch': 'resnet50',
-    'checkpoint_location': None,
-    'from_robustness': False,
-    'dataset': 'dataset/imagenet',
-    'num_samples': 500,
-    'sigma': 0.03137254901960784,
-    'num_transformations': 50,
-    'batch_size': 2,
-    'masks': False,
-    'eps': 0.03137254901960784,
-    'norm': 'linf',
-    'step_size': 0.00392156862745098,
-    'num_iterations': 10,
-    'unadversarial': False,
-    'targeted': False,
-    'eot': False,
-    'transfer': False,
-    'selective': False,
-    'logits_ensemble': False,
-    'similarity_coeffs': False,
-    'num_surrogates': 5,
-    'restart_iterations': 10,
-    'device': 'cpu',
-    'seed': None,
-    'save_file_location': 'results/pgd_new_experiments/test.py',
-}
+PGD_DEFAULT_ARGS_DICT = {arg['name'][2:]: arg['default'] for arg in PARSER_ARGS}
 
 
 def get_args_dict():
