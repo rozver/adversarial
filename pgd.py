@@ -30,6 +30,7 @@ PARSER_ARGS = [
     {'name': '--eot', 'default': False, 'action': 'store_true'},
     {'name': '--transfer', 'default': False, 'action': 'store_true'},
     {'name': '--selective', 'default': False, 'action': 'store_true'},
+    {'name': '--logits_ensemble', 'default': False, 'action': 'store_true'},
     {'name': '--similarity_coeffs', 'default': False, 'action': 'store_true'},
     {'name': '--num_surrogates', 'type': int, 'choices': None, 'default': 5, 'action': None},
     {'name': '--device', 'type': str, 'choices': ['cpu', 'cuda'], 'default': 'cpu', 'action': None},
@@ -56,6 +57,7 @@ PGD_DEFAULT_ARGS_DICT = {
     'eot': False,
     'transfer': False,
     'selective': False,
+    'logits_ensemble': False,
     'similarity_coeffs': False,
     'num_surrogates': 5,
     'restart_iterations': 10,
@@ -253,15 +255,27 @@ class Attacker:
         return loss
 
     def transfer_loss(self, x, labels):
-        loss = torch.zeros([1], device=self.args_dict['device'])
+        predictions = None
+        loss = None
+
+        if self.args_dict['logits_ensemble']:
+            predictions = torch.zeros((x.size(0), 1000), device=self.args_dict['device'])
+        else:
+            loss = torch.zeros([1], device=self.args_dict['device'])
 
         for arch, current_model in zip(self.similarity_coeffs.keys(), self.surrogate_models):
-            predictions = predict(to_device(current_model, self.args_dict['device']), x)
+            current_predictions = predict(to_device(current_model, self.args_dict['device']), x)
 
             to_device(current_model, 'cpu')
 
-            current_loss = self.criterion(predictions, labels)
-            loss = torch.add(loss, self.optimization_direction * self.similarity_coeffs[arch] * current_loss)
+            if self.args_dict['logits_ensemble']:
+                predictions = torch.add(predictions, self.similarity_coeffs[arch]*current_predictions)
+            else:
+                current_loss = self.criterion(current_predictions, labels)
+                loss = torch.add(loss, self.optimization_direction * self.similarity_coeffs[arch] * current_loss)
+
+        if self.args_dict['logits_ensemble']:
+            loss = self.optimization_direction * self.criterion(predictions, labels)
 
         return loss
 
