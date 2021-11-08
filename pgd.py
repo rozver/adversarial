@@ -126,10 +126,7 @@ class Attacker:
         x = image_batch.clone().detach().requires_grad_(True)
 
         if self.args_dict['transfer'] and self.args_dict['selective']:
-            self.surrogate_models = self.selective_transfer(image_batch,
-                                                            mask_batch,
-                                                            targets,
-                                                            step)
+            self.selective_transfer(image_batch, mask_batch, targets, step)
             step.eps = self.args_dict['eps']
 
         iterations_without_updates = 0
@@ -215,6 +212,7 @@ class Attacker:
                 model_scores[arch] += current_loss.item()
 
             to_device(current_model, 'cpu')
+            del current_model
 
         surrogates_list = [arch
                            for arch in sorted(model_scores, key=model_scores.get)
@@ -229,10 +227,6 @@ class Attacker:
         self.similarity_coeffs = (dict(zip(surrogates_list, coeffs)))
         ALL_SIMILARITY_COEFFS.append(self.similarity_coeffs)
 
-        surrogate_models = [get_model(arch, pretrained=True, freeze=True).eval()
-                            for arch in surrogates_list]
-        return surrogate_models
-
     def normal_loss(self, x, labels):
         predictions = predict(self.model, x)
         loss = self.optimization_direction * self.criterion(predictions, labels)
@@ -242,10 +236,12 @@ class Attacker:
         if self.args_dict['logits_ensemble']:
             predictions = torch.zeros((x.size(0), 1000), device=self.args_dict['device'])
 
-            for arch, current_model in zip(self.similarity_coeffs.keys(), self.surrogate_models):
-                current_predictions = predict(to_device(current_model, self.args_dict['device']), x)
+            for arch in self.similarity_coeffs.keys():
+                current_model = get_model(arch, pretrained=True, freeze=True, device=self.args_dict['device'])
+                current_predictions = predict(current_model, x)
 
                 to_device(current_model, 'cpu')
+                del current_model
 
                 predictions = torch.add(predictions, self.similarity_coeffs[arch] * current_predictions)
 
@@ -254,9 +250,12 @@ class Attacker:
         else:
             loss = torch.zeros([1], device=self.args_dict['device'])
 
-            for arch, current_model in zip(self.similarity_coeffs.keys(), self.surrogate_models):
-                current_predictions = predict(to_device(current_model, self.args_dict['device']), x)
+            for arch in self.similarity_coeffs.keys():
+                current_model = get_model(arch, pretrained=True, freeze=True, device=self.args_dict['device'])
+                current_predictions = predict(current_model, x)
+
                 to_device(current_model, 'cpu')
+                del current_model
 
                 current_loss = self.criterion(current_predictions, labels)
                 loss = torch.add(loss, self.optimization_direction * self.similarity_coeffs[arch] * current_loss)
@@ -295,6 +294,8 @@ def main():
     total_num_samples = 0
     adversarial_examples_list = []
     predictions_list = []
+
+    print(model.device)
 
     print('Starting PGD...')
     for index, batch in enumerate(loader):
