@@ -17,6 +17,7 @@ PARSER_ARGS = [
     {'name': '--checkpoint_location', 'type': str, 'choices': None, 'default': None, 'action': None},
     {'name': '--from_robustness', 'default': False, 'action': 'store_true'},
     {'name': '--dataset', 'type': str, 'choices': None, 'default': 'dataset/imagenet', 'action': None},
+    {'name': '--old_dataset_format', 'default': False, 'action': 'store_true'},
     {'name': '--num_samples', 'type': int, 'choices': None, 'default': 50, 'action': None},
     {'name': '--sigma', 'type': int, 'choices': None, 'default': 8, 'action': None},
     {'name': '--num_transformations', 'type': int, 'choices': None, 'default': 50, 'action': None},
@@ -289,16 +290,27 @@ def main():
     if args_dict['masks']:
         loader = torch.load(args_dict['dataset'])
     else:
-        dataset = load_imagenet(args_dict['dataset'])
-        loader, _ = dataset.make_loaders(workers=10, batch_size=args_dict['batch_size'])
+        if args_dict['old_dataset_format']:
+            dataset_data = torch.load(args_dict['dataset'])
+
+            images = torch.load(dataset_data['images'])
+            labels = torch.load(dataset_data['labels'])
+
+            images_loader = torch.utils.data.DataLoader(images, num_workers=10, batch_size=args_dict['batch_size'])
+            labels_loader = torch.utils.data.DataLoader(labels, num_workers=10, batch_size=args_dict['batch_size'])
+
+            loader = zip(images_loader, labels_loader)
+
+            del dataset_data, images, labels, images_loader, labels_loader
+        else:
+            dataset = load_imagenet(args_dict['dataset'])
+            loader, _ = dataset.make_loaders(workers=10, batch_size=args_dict['batch_size'])
     print('Finished!\n')
 
     mask_batch = 1
     total_num_samples = 0
     adversarial_examples_list = []
     predictions_list = []
-
-    print(model.device)
 
     print('Starting PGD...')
     for index, batch in enumerate(loader):
