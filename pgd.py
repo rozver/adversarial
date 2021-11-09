@@ -7,6 +7,7 @@ from file_utils import get_current_time, validate_save_file_location
 import argparse
 import random
 import copy
+import time
 
 TARGET_CLASS = 934
 ALL_SIMILARITY_COEFFS = []
@@ -62,9 +63,10 @@ def get_args_dict():
 
 
 def normalize_args_dict(args_dict):
-    time = str(get_current_time())
+    date_time = str(get_current_time())
+
     if args_dict['save_file_location'] is None:
-        args_dict['save_file_location'] = 'results/pgd_new_experiments/' + time + '.pt'
+        args_dict['save_file_location'] = 'results/pgd_new_experiments/' + date_time + '.pt'
     validate_save_file_location(args_dict['save_file_location'])
 
     if args_dict['arch'] == 'random':
@@ -262,6 +264,9 @@ class Attacker:
 
 
 def main():
+    start_time = time.time()
+    print('Start time: ' + str(start_time) + '\n')
+
     args_dict = normalize_args_dict(get_args_dict())
 
     print('Running PGD experiment with the following arguments:')
@@ -351,6 +356,8 @@ def main():
                 'args_dict': args_dict},
                args_dict['save_file_location'])
     print('Finished!\n')
+
+    print('End time: ' + str(time.time()-start_time))
 
 
 if __name__ == '__main__':
