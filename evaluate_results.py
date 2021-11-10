@@ -1,8 +1,10 @@
 import torch
-import os
 from torchvision.utils import save_image
-import argparse
 from matplotlib import pyplot as plt
+import json
+import os
+import argparse
+
 
 ARGS_DICT_KEYS_PGD = ['arch', 'checkpoint_location', 'from_robustness', 'dataset', 'masks', 'eps', 'norm',
                       'step_size', 'num_iterations', 'targeted', 'eot', 'transfer', 'save_file_location']
@@ -61,6 +63,7 @@ def save_images(results, results_location, dataset, save_original):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--location', type=str, required=True)
+    parser.add_argument('--show_surrogates', default=False, action='store_true')
     parser.add_argument('--save_images', default=False, action='store_true')
     args_dict = vars(parser.parse_args())
 
@@ -101,9 +104,20 @@ def main():
             num_samples = len(results['predictions'])
 
         success_rate = round(successful_attacks / num_samples, 2)
-        setups_and_results.append(str(results['args_dict']) + '\nAttack success rate: ' +
-                                  str(success_rate) +
-                                  '\n')
+        setups_and_results.append(str(results['args_dict']) + '\n')
+
+        if args_dict['show_surrogates']:
+            if 'similarity' in results.keys():
+                similarity_str = ''
+
+                for similarity_data in results['similarity']:
+                    similarity_str = similarity_str + '[' + json.dumps(similarity_data) + '],\n'
+
+                surrogates_str = similarity_str[:-2]
+                setups_and_results.append(surrogates_str)
+
+        setups_and_results.append('Attack success rate: ' +
+                                  str(success_rate) + '\n')
 
         if args_dict['save_images']:
             save_original = False
