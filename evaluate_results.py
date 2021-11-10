@@ -111,7 +111,7 @@ def main():
                 similarity_str = ''
 
                 for similarity_data in results['similarity']:
-                    similarity_str = similarity_str + + json.dumps(similarity_data) + ',\n'
+                    similarity_str = similarity_str + json.dumps(similarity_data) + ',\n'
 
                 setups_and_results.append(similarity_str[:-2])
 
