@@ -106,17 +106,17 @@ def main():
         success_rate = round(successful_attacks / num_samples, 2)
         setups_and_results.append(str(results['args_dict']) + '\n')
 
-        if args_dict['model_similarity']:
-            if 'similarity' in results.keys():
+        if args_dict['model_similarity'] and 'similarity' in results.keys():
+            if len(results['similarity']) != 0:
                 similarity_str = ''
 
                 for similarity_data in results['similarity']:
                     similarity_str = similarity_str + json.dumps(similarity_data) + ',\n'
 
-                setups_and_results.append(similarity_str[:-2])
+                setups_and_results.append(similarity_str[:-2] + '\n')
 
         setups_and_results.append('Attack success rate: ' +
-                                  str(success_rate) + '\n')
+                                  str(success_rate) + '\n\n\n')
 
         if args_dict['save_images']:
             save_original = False
