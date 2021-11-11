@@ -26,21 +26,31 @@ class CocoCategory(torch.utils.data.Dataset):
     def __init__(self, location, category, transform=torchvision.transforms.ToTensor()):
         self.category = category
 
+        self.images = []
+        self.masks = []
+
         if category == 'all':
             self.location = os.path.join(location, 'categories')
             if os.path.exists(location):
-                self.images = []
-                self.masks = []
-
                 for category in os.listdir(self.location):
                     category_location = os.path.join(self.location, category)
-                    self.images.append(os.listdir(os.path.join(category_location, 'images')))
-                    self.masks.append(os.listdir(os.path.join(category_location, 'masks')))
+
+                    images_directory = os.path.join(category_location, 'images')
+                    masks_directory = os.path.join(category_location, 'masks')
+
+                    for image, mask in zip(os.listdir(images_directory), os.listdir(masks_directory)):
+                        self.images.append(os.path.join(images_directory, image))
+                        self.masks.append(os.path.join(masks_directory, mask))
+
         else:
             self.location = os.path.join(location, category)
             if os.path.exists(location):
-                self.images = os.listdir(os.path.join(self.location, 'images'))
-                self.masks = os.listdir(os.path.join(self.location, 'masks'))
+                images_directory = os.path.join(self.location, 'images')
+                masks_directory = os.path.join(self.location, 'masks')
+
+                for image, mask in zip(os.listdir(images_directory), os.listdir(masks_directory)):
+                    self.images.append(os.path.join(images_directory, image))
+                    self.masks.append(os.path.join(masks_directory, mask))
 
         if len(self.images) != len(self.masks):
             raise ValueError('Number of images and number of masks do not match!')
@@ -51,11 +61,8 @@ class CocoCategory(torch.utils.data.Dataset):
         return len(self.images)
 
     def __getitem__(self, index):
-        image_location = os.path.join(os.path.join(self.location, 'images'), self.images[index])
-        mask_location = os.path.join(os.path.join(self.location, 'masks'), self.images[index])
-
-        image = Image.open(image_location).convert("RGB")
-        mask = Image.open(mask_location).convert("RGB")
+        image = Image.open(self.images[index]).convert("RGB")
+        mask = Image.open(self.masks[index]).convert("RGB")
 
         return [self.transform(image), self.transform(mask)]
 
