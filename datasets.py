@@ -24,15 +24,25 @@ class ImageNet(torch.utils.data.Dataset):
 class CocoCategory(torch.utils.data.Dataset):
     def __init__(self, location, category, transform):
         self.category = category
-        self.location = os.path.join(location, category)
-        self.transform = transform
 
-        if os.path.exists(location):
-            self.images = os.listdir(os.path.join(self.location, 'images'))
-            self.masks = os.listdir(os.path.join(self.location, 'masks'))
+        if category == 'all':
+            self.location = os.path.join(location, 'categories')
+            if os.path.exists(location):
+                self.images = []
+                self.masks = []
 
-            if len(self.images) != len(self.masks):
-                raise ValueError('Number of images and number of masks do not match!')
+                for category in os.listdir(self.location):
+                    category_location = os.path.join(self.location, category)
+                    self.images.append(os.listdir(os.path.join(category_location, 'images')))
+                    self.masks.append(os.listdir(os.path.join(category_location, 'masks')))
+        else:
+            self.location = os.path.join(location, category)
+            if os.path.exists(location):
+                self.images = os.listdir(os.path.join(self.location, 'images'))
+                self.masks = os.listdir(os.path.join(self.location, 'masks'))
+
+        if len(self.images) != len(self.masks):
+            raise ValueError('Number of images and number of masks do not match!')
 
     def __len__(self):
         return len(self.images)
