@@ -44,6 +44,8 @@ class CocoCategory(torch.utils.data.Dataset):
         if len(self.images) != len(self.masks):
             raise ValueError('Number of images and number of masks do not match!')
 
+        self.transform = transform
+
     def __len__(self):
         return len(self.images)
 
