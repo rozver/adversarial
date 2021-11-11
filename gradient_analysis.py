@@ -102,7 +102,11 @@ def get_averages_dict(model, criterion, args_dict):
 
             if dataset.__len__() == 0:
                 continue
-            for image, mask in dataset:
+
+            for index, (image, mask) in enumerate(dataset):
+                if index == args_dict['num_samples_per_class']:
+                    break
+
                 prediction = predict(model, image.cuda())
                 label = torch.argmax(prediction, dim=1).cuda()
 
@@ -129,6 +133,7 @@ def main():
     parser.add_argument('--checkpoint_location', type=str, default=None)
     parser.add_argument('--from_robustness', default=False, action='store_true')
     parser.add_argument('--dataset', type=str, default='dataset/coco')
+    parser.add_argument('--num_samples_per_class', type=int, default=10)
     parser.add_argument('--normalize_grads', default=False, action='store_true')
     parser.add_argument('--save_file_location', type=str, default='results/gradient/' + time + '.pt')
     args_dict = vars(parser.parse_args())
