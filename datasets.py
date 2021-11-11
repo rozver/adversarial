@@ -1,11 +1,12 @@
-import os
-from PIL import Image
 import torch
+import torchvision
+from PIL import Image
+import os
 
 
 # Class for a custom dataset - ImageNet
 class ImageNet(torch.utils.data.Dataset):
-    def __init__(self, location, transform):
+    def __init__(self, location, transform=torchvision.transforms.ToTensor()):
         self.location = location
         self.transform = transform
         self.all_images = os.listdir(location)
@@ -22,7 +23,7 @@ class ImageNet(torch.utils.data.Dataset):
 
 # Class for a custom dataset for given COCO category
 class CocoCategory(torch.utils.data.Dataset):
-    def __init__(self, location, category, transform):
+    def __init__(self, location, category, transform=torchvision.transforms.ToTensor()):
         self.category = category
 
         if category == 'all':
