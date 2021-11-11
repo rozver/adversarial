@@ -225,8 +225,11 @@ class CocoCategoryPreprocessor:
             raise ValueError('Dataset images and masks for the chosen category are not exported!')
 
     def serialize(self):
+        serialization_location = os.path.join(self.location, 'serialized')
         if self.dataset is not None:
-            torch.save(self.dataset, self.category_location + '.pt')
+            if not os.path.exists(serialization_location):
+                os.makedirs(serialization_location)
+            torch.save(self.dataset, serialization_location + self.category + '.pt')
         else:
             raise ValueError('Dataset not set!')
 
