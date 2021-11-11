@@ -229,7 +229,7 @@ class CocoCategoryPreprocessor:
         if self.dataset is not None:
             if not os.path.exists(serialization_location):
                 os.makedirs(serialization_location)
-            torch.save(self.dataset, serialization_location + self.category + '.pt')
+            torch.save(self.dataset, os.path.join(serialization_location, self.category + '.pt'))
         else:
             raise ValueError('Dataset not set!')
 
