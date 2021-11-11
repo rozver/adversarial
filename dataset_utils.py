@@ -173,21 +173,22 @@ class CocoCategoryPreprocessor:
         else:
             raise ValueError('Invalid dataset location!')
         self.category = category
+        self.category_location = os.path.join(self.location, 'categories/' + self.category)
         self.dataset = None
 
     def export_images_and_masks(self):
-        categories_file = open(os.path.join(self.location, 'categories_list.txt'))
+        categories_file = open(os.path.join(os.path.dirname(self.location), 'categories_list.txt'), 'r')
         file_read = categories_file.read()
         if '{}'.format(self.category) in file_read:
-            category_directory = os.path.join(self.location, self.category)
-            if not os.path.exists(category_directory):
-                os.mkdir(category_directory)
-                os.mkdir(os.path.join(category_directory, 'images'))
-                os.mkdir(os.path.join(category_directory, 'masks'))
+            if not os.path.exists(self.category_location):
+                os.makedirs(self.category_location)
+                os.mkdir(os.path.join(self.category_location, 'images'))
+                os.mkdir(os.path.join(self.category_location, 'masks'))
 
-            annotations_file_location = os.path.join(self.location, 'annotations/instances_val2017.json')
-            images_folder_location = os.path.join(self.location, 'images/val2017')
-            coco = COCO(annotations_file_location)
+            images_location = os.path.join(self.location, 'images')
+            annotations_file = os.path.join(self.location, 'ann.json')
+
+            coco = COCO(annotations_file)
 
             cat_ids = coco.getCatIds(catNms=self.category)
             img_ids = coco.getImgIds(catIds=cat_ids)
@@ -197,8 +198,8 @@ class CocoCategoryPreprocessor:
                 annotations_ids = coco.getAnnIds(imgIds=image['id'], catIds=cat_ids, iscrowd=None)
                 annotations = coco.loadAnns(annotations_ids)
 
-                shutil.copy(os.path.join(images_folder_location, image['file_name']),
-                            os.path.join(category_directory, 'images/{}.png'.format(index)))
+                shutil.copy(os.path.join(images_location, image['file_name']),
+                            os.path.join(self.category_location, 'images/{}.png'.format(index)))
 
                 mask = coco.annToMask(annotations[0])
 
@@ -207,25 +208,25 @@ class CocoCategoryPreprocessor:
 
                 mask = torch.from_numpy(mask).float()
 
-                shutil.copy(os.path.join(images_folder_location, image['file_name']),
-                            os.path.join(category_directory, 'images/{}.png'.format(index)))
+                shutil.copy(os.path.join(images_location, image['file_name']),
+                            os.path.join(self.category_location, 'images/{}.png'.format(index)))
 
-                save_image(mask, os.path.join(category_directory, 'masks/{}.png'.format(index)))
+                save_image(mask, os.path.join(self.category_location, 'masks/{}.png'.format(index)))
         else:
             raise ValueError('Incorrect category type specified!')
 
     def set_dataset(self):
-        category_location = os.path.join(self.location, self.category)
-        if os.path.exists(category_location):
-            dataset = datasets.CocoCategory(self.location, self.category, transform=transforms.ToTensor())
+        if os.path.exists(self.category_location):
+            dataset = datasets.CocoCategory(os.path.dirname(self.category_location),
+                                            self.category,
+                                            transform=transforms.ToTensor())
             self.dataset = dataset
         else:
             raise ValueError('Dataset images and masks for the chosen category are not exported!')
 
     def serialize(self):
-        category_location = os.path.join(self.location, self.category)
         if self.dataset is not None:
-            torch.save(self.dataset, category_location + '.pt')
+            torch.save(self.dataset, self.category_location + '.pt')
         else:
             raise ValueError('Dataset not set!')
 
