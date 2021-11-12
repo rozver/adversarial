@@ -145,7 +145,6 @@ def main():
     criterion = torch.nn.CrossEntropyLoss(reduction='none')
 
     averages = get_averages_dict(model, criterion, args_dict)
-    print(averages)
     torch.save({'averages': averages, 'args': args_dict},
                args_dict['save_file_location'])
 
