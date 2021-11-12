@@ -23,6 +23,7 @@ PARSER_ARGS = [
     {'name': '--num_transformations', 'type': int, 'choices': None, 'default': 50, 'action': None},
     {'name': '--batch_size', 'type': int, 'choices': None, 'default': 2, 'action': None},
     {'name': '--masks', 'default': False, 'action': 'store_true'},
+    {'name': '--flip_masks', 'default': False, 'action': 'store_true'},
     {'name': '--eps', 'type': float, 'choices': None, 'default': 8, 'action': None},
     {'name': '--norm', 'type': str, 'choices': ['l2', 'linf'], 'default': 'linf', 'action': None},
     {'name': '--step_size', 'type': float, 'choices': None, 'default': 1, 'action': None},
@@ -318,6 +319,10 @@ def main():
             image_batch, mask_batch = batch
             image_batch.unsqueeze_(0)
             mask_batch.unsqueeze_(0)
+
+            if args_dict['flip_masks']:
+                mask_batch = mask_batch - torch.ones_like(mask_batch)
+                mask_batch = mask_batch * mask_batch
 
             label_batch = torch.argmax(predict(model, to_device(image_batch, args_dict['device'])), dim=1)
             if mask_batch.size != image_batch.size():
