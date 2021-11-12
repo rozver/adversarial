@@ -73,7 +73,7 @@ def get_category_average(grads, dataset, num_samples):
     foreground_average /= num_samples
     background_average /= num_samples
 
-    return foreground_average.cpu(), background_average.cpu()
+    return foreground_average, background_average
 
 
 def get_averages_by_category(grads_dict, args_dict):
@@ -145,6 +145,7 @@ def main():
     criterion = torch.nn.CrossEntropyLoss(reduction='none')
 
     averages = get_averages_dict(model, criterion, args_dict)
+    print(averages)
     torch.save({'averages': averages, 'args': args_dict},
                args_dict['save_file_location'])
 
