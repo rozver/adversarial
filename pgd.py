@@ -103,6 +103,8 @@ class Attacker:
                 coeffs = [1 / len(surrogates_list)] * len(surrogates_list)
                 self.similarity_coeffs = (dict(zip(surrogates_list, coeffs)))
                 ALL_SIMILARITY_COEFFS.append(self.similarity_coeffs)
+
+                self.surrogate_models = [get_model(arch, pretrained=True, freeze=True).eval() for arch in surrogates_list]
             else:
                 self.args_dict['label_shifts'] = 0
         else:
@@ -238,12 +240,12 @@ class Attacker:
         if self.args_dict['logits_ensemble']:
             predictions = torch.zeros((x.size(0), 1000), device=self.args_dict['device'])
 
-            for arch in self.similarity_coeffs.keys():
-                current_model = get_model(arch, pretrained=True, freeze=True, device=self.args_dict['device'])
+            for arch, current_model in zip(self.similarity_coeffs.keys(), self.surrogate_models):
+                to_device(current_model, 'cuda')
+                
                 current_predictions = predict(current_model, x)
 
                 to_device(current_model, 'cpu')
-                del current_model
 
                 predictions = torch.add(predictions, self.similarity_coeffs[arch] * current_predictions)
 
