@@ -50,7 +50,7 @@ UNSUPPORTED_ARCHS = [
     'vit_small_patch32_384'
 ]
 
-ARCHS_LIST = ['resnet50', 'resnet34', 'vgg16', 'vgg13', 'inception_v3']
+ARCHS_LIST = ['resnet50', 'resnet34', 'vgg16', 'vgg13', 'vgg19', 'inception_v3']
 
 
 def predict(model, x):
