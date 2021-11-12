@@ -25,28 +25,6 @@ def get_gradient(model, image, label, criterion):
     return grad.cpu()
 
 
-def get_grad_dict(model, criterion, args_dict):
-    grads_dict = {}
-
-    for category_file in os.listdir(args_dict['dataset']):
-        category_grads = []
-        if category_file.endswith('.pt'):
-            dataset = torch.load(os.path.join(args_dict['dataset'], category_file))
-
-            if dataset.__len__() == 0:
-                continue
-            for image, _ in dataset:
-                prediction = get_prediction(model, image.cuda())
-                label = torch.argmax(prediction, dim=1).cuda()
-
-                current_grad = get_gradient(model, image, label, criterion)
-                category_grads.append(current_grad.cpu())
-
-            grads_dict[dataset.category] = category_grads
-
-    return grads_dict
-
-
 def normalize_grad(grad):
     mean_grad = torch.cuda.FloatTensor([[[torch.mean(grad[0])]],
                                         [[torch.mean(grad[1])]],
@@ -136,7 +114,6 @@ def get_averages_dict(model, criterion, args_dict):
                 category_grads.append(current_grad.cpu())
 
             foreground_average, background_average = get_category_average(category_grads, dataset, num_samples)
-            print(str(foreground_average) + ' ' + str(background_average))
             averages_dict[dataset.category] = [foreground_average, background_average]
 
     return averages_dict
