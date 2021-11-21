@@ -301,7 +301,6 @@ def main():
 
             images_loader = torch.utils.data.DataLoader(images, num_workers=10, batch_size=args_dict['batch_size'])
             labels_loader = torch.utils.data.DataLoader(labels, num_workers=10, batch_size=args_dict['batch_size'])
-
             loader = zip(images_loader, labels_loader)
 
             del dataset_data, images, labels, images_loader, labels_loader
